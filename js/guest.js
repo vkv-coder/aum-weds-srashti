@@ -285,10 +285,13 @@ async function renderGalleryPage(container) {
   container.innerHTML = `
     <div class="card">
       <div class="section-header"><h3>📸 Gallery</h3>
-        <label class="btn-primary btn-sm" style="cursor:pointer;">
-          Add Photo
-          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="uploadPhoto(event)">
-        </label>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary btn-sm" onclick="openCameraModal()">📷 Take Photo</button>
+          <label class="btn-secondary btn-sm" style="cursor:pointer;">
+            Choose from Gallery
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadPhoto(event)">
+          </label>
+        </div>
       </div>
       <div id="gallery-grid" class="gallery-grid">Loading...</div>
     </div>
@@ -312,10 +315,15 @@ async function loadGallery() {
 async function uploadPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
-  showToast('Uploading...');
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  await uploadPhotoBlob(file, ext, file.type || 'image/jpeg');
+  event.target.value = '';
+}
+
+async function uploadPhotoBlob(blob, ext, contentType) {
+  showToast('Uploading...');
   const path = `${currentFamily.code}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error: upErr } = await db.storage.from(GALLERY_BUCKET).upload(path, file, { contentType: file.type });
+  const { error: upErr } = await db.storage.from(GALLERY_BUCKET).upload(path, blob, { contentType: contentType || 'image/jpeg' });
   if (upErr) { showToast('Upload failed: ' + upErr.message, 'error'); return; }
 
   let uploaderName = localStorage.getItem(NAME_KEY);
@@ -327,7 +335,59 @@ async function uploadPhoto(event) {
   if (error) { showToast('Could not save photo: ' + error.message, 'error'); return; }
   showToast('📸 Photo added!');
   loadGallery();
-  event.target.value = '';
+}
+
+// ---------- In-app camera ----------
+let _cameraStream = null;
+
+async function openCameraModal() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Camera not supported on this browser - use "Choose from Gallery" instead.', 'error');
+    return;
+  }
+  openModal(`
+    <div class="modal-title">Take Photo</div>
+    <video id="camera-video" autoplay playsinline muted style="width:100%;border-radius:8px;background:#000;"></video>
+    <div class="error-msg" id="camera-error"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="captureCameraPhoto()">📸 Capture</button>
+      <button class="btn-secondary" onclick="closeCameraModal()">Cancel</button>
+    </div>
+  `);
+  try {
+    _cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = document.getElementById('camera-video');
+    if (video) video.srcObject = _cameraStream;
+  } catch (e) {
+    const errEl = document.getElementById('camera-error');
+    if (errEl) errEl.textContent = 'Could not access camera: ' + e.message;
+  }
+}
+
+function stopCameraStream() {
+  if (_cameraStream) {
+    _cameraStream.getTracks().forEach(t => t.stop());
+    _cameraStream = null;
+  }
+}
+
+function closeCameraModal() {
+  stopCameraStream();
+  closeModal();
+}
+
+function captureCameraPhoto() {
+  const video = document.getElementById('camera-video');
+  if (!video || !video.videoWidth) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob((blob) => {
+    stopCameraStream();
+    closeModal();
+    if (blob) uploadPhotoBlob(blob, 'jpg', 'image/jpeg');
+  }, 'image/jpeg', 0.9);
 }
 
 tryAutoLogin();
