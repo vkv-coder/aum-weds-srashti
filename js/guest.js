@@ -312,11 +312,38 @@ async function loadGallery() {
   }).join('');
 }
 
+const IMG_MAX_DIM = 1600;
+const IMG_QUALITY = 0.82;
+
+// Resizes to at most IMG_MAX_DIM on the longest side and re-encodes as
+// JPEG, so gallery uploads don't eat storage/bandwidth at full camera
+// resolution. Falls back to the original file untouched if the browser
+// can't decode it (e.g. an unusual format) rather than blocking the upload.
+async function compressImageBlob(fileOrBlob) {
+  try {
+    const bitmap = await createImageBitmap(fileOrBlob);
+    let { width, height } = bitmap;
+    if (width > IMG_MAX_DIM || height > IMG_MAX_DIM) {
+      if (width >= height) { height = Math.round(height * IMG_MAX_DIM / width); width = IMG_MAX_DIM; }
+      else { width = Math.round(width * IMG_MAX_DIM / height); height = IMG_MAX_DIM; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', IMG_QUALITY));
+    if (blob) return { blob, ext: 'jpg', contentType: 'image/jpeg' };
+  } catch (e) { /* fall through to uploading the original */ }
+  const ext = (fileOrBlob.name ? (fileOrBlob.name.split('.').pop() || 'jpg') : 'jpg').toLowerCase();
+  return { blob: fileOrBlob, ext, contentType: fileOrBlob.type || 'image/jpeg' };
+}
+
 async function uploadPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  await uploadPhotoBlob(file, ext, file.type || 'image/jpeg');
+  const { blob, ext, contentType } = await compressImageBlob(file);
+  await uploadPhotoBlob(blob, ext, contentType);
   event.target.value = '';
 }
 
@@ -379,15 +406,21 @@ function closeCameraModal() {
 function captureCameraPhoto() {
   const video = document.getElementById('camera-video');
   if (!video || !video.videoWidth) return;
+  let width = video.videoWidth;
+  let height = video.videoHeight;
+  if (width > IMG_MAX_DIM || height > IMG_MAX_DIM) {
+    if (width >= height) { height = Math.round(height * IMG_MAX_DIM / width); width = IMG_MAX_DIM; }
+    else { width = Math.round(width * IMG_MAX_DIM / height); height = IMG_MAX_DIM; }
+  }
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d').drawImage(video, 0, 0, width, height);
   canvas.toBlob((blob) => {
     stopCameraStream();
     closeModal();
     if (blob) uploadPhotoBlob(blob, 'jpg', 'image/jpeg');
-  }, 'image/jpeg', 0.9);
+  }, 'image/jpeg', IMG_QUALITY);
 }
 
 tryAutoLogin();
