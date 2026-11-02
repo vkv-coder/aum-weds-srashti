@@ -1,0 +1,516 @@
+-- ==========================================
+-- Aum weds Srashti - wedding guest PWA
+-- All tables prefixed wd_ (shared "rotry_event" Supabase project).
+-- Guests authenticate with a family code only (no Supabase Auth, no
+-- approval). Admin authenticates with a PIN -> short-lived session token.
+-- Every table has RLS enabled with ZERO anon/authenticated grants on the
+-- base tables except wd_itinerary/wd_announcements (public read, nothing
+-- sensitive) - all other access goes through SECURITY DEFINER RPCs that
+-- re-validate the family code / admin token on every call.
+-- ==========================================
+
+create table if not exists wd_families (
+  code text primary key,
+  family_name text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists wd_members (
+  id uuid primary key default gen_random_uuid(),
+  family_code text not null references wd_families(code) on delete cascade,
+  name text not null,
+  room_no text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists wd_members_family_idx on wd_members(family_code);
+
+create table if not exists wd_travel_details (
+  member_id uuid primary key references wd_members(id) on delete cascade,
+  arrival_date date,
+  arrival_time time,
+  arrival_mode text,
+  arrival_number text,
+  departure_date date,
+  departure_time time,
+  departure_mode text,
+  departure_number text,
+  notes text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists wd_itinerary (
+  id uuid primary key default gen_random_uuid(),
+  event_name text not null,
+  event_date date,
+  start_time time,
+  end_time time,
+  venue text,
+  menu text,
+  dress_code text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists wd_announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists wd_gallery_photos (
+  id uuid primary key default gen_random_uuid(),
+  family_code text references wd_families(code) on delete set null,
+  uploader_name text,
+  storage_path text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists wd_push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  family_code text not null references wd_families(code) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists wd_admin_secret (
+  id int primary key default 1,
+  pin_hash text not null,
+  constraint wd_admin_secret_single_row check (id = 1)
+);
+
+create table if not exists wd_admin_sessions (
+  token uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '12 hours')
+);
+
+alter table wd_families enable row level security;
+alter table wd_members enable row level security;
+alter table wd_travel_details enable row level security;
+alter table wd_itinerary enable row level security;
+alter table wd_announcements enable row level security;
+alter table wd_gallery_photos enable row level security;
+alter table wd_push_subscriptions enable row level security;
+alter table wd_admin_secret enable row level security;
+alter table wd_admin_sessions enable row level security;
+
+revoke all on wd_families, wd_members, wd_travel_details, wd_gallery_photos,
+  wd_push_subscriptions, wd_admin_secret, wd_admin_sessions
+  from anon, authenticated;
+
+-- Itinerary & announcements: nothing sensitive, readable without a code so
+-- the admin panel preview and any future "public teaser" page both work.
+drop policy if exists wd_itinerary_read on wd_itinerary;
+create policy wd_itinerary_read on wd_itinerary for select using (true);
+revoke insert, update, delete on wd_itinerary from anon, authenticated;
+
+drop policy if exists wd_announcements_read on wd_announcements;
+create policy wd_announcements_read on wd_announcements for select using (true);
+revoke insert, update, delete on wd_announcements from anon, authenticated;
+
+grant select on wd_itinerary, wd_announcements to anon, authenticated;
+
+-- ==========================================
+-- Internal helpers (not granted to anon/authenticated directly)
+-- ==========================================
+
+create or replace function wd_assert_admin(p_token uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_token is null or not exists (
+    select 1 from wd_admin_sessions where token = p_token and expires_at > now()
+  ) then
+    raise exception 'Not authorised.';
+  end if;
+end;
+$$;
+revoke all on function wd_assert_admin(uuid) from public;
+
+create or replace function wd_assert_family(p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_code is null or not exists (select 1 from wd_families where code = lower(p_code)) then
+    raise exception 'Invalid code.';
+  end if;
+end;
+$$;
+revoke all on function wd_assert_family(text) from public;
+
+-- ==========================================
+-- Guest-facing RPCs
+-- ==========================================
+
+create or replace function wd_guest_login(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+  v_family wd_families;
+  v_result jsonb;
+begin
+  select * into v_family from wd_families where code = v_code;
+  if v_family is null then
+    raise exception 'Family code not found.';
+  end if;
+
+  select jsonb_build_object(
+    'code', v_family.code,
+    'family_name', v_family.family_name,
+    'members', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', m.id,
+        'name', m.name,
+        'room_no', m.room_no,
+        'travel', (
+          select jsonb_build_object(
+            'arrival_date', t.arrival_date, 'arrival_time', t.arrival_time,
+            'arrival_mode', t.arrival_mode, 'arrival_number', t.arrival_number,
+            'departure_date', t.departure_date, 'departure_time', t.departure_time,
+            'departure_mode', t.departure_mode, 'departure_number', t.departure_number,
+            'notes', t.notes
+          ) from wd_travel_details t where t.member_id = m.id
+        )
+      ) order by m.sort_order, m.name)
+      from wd_members m where m.family_code = v_family.code
+    ), '[]'::jsonb)
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+revoke all on function wd_guest_login(text) from public;
+grant execute on function wd_guest_login(text) to anon, authenticated;
+
+create or replace function wd_save_travel_details(
+  p_code text, p_member_id uuid,
+  p_arrival_date date, p_arrival_time time, p_arrival_mode text, p_arrival_number text,
+  p_departure_date date, p_departure_time time, p_departure_mode text, p_departure_number text,
+  p_notes text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+begin
+  if not exists (select 1 from wd_members where id = p_member_id and family_code = v_code) then
+    raise exception 'Member does not belong to this family code.';
+  end if;
+
+  insert into wd_travel_details (
+    member_id, arrival_date, arrival_time, arrival_mode, arrival_number,
+    departure_date, departure_time, departure_mode, departure_number, notes, updated_at
+  ) values (
+    p_member_id, p_arrival_date, p_arrival_time, p_arrival_mode, p_arrival_number,
+    p_departure_date, p_departure_time, p_departure_mode, p_departure_number, p_notes, now()
+  )
+  on conflict (member_id) do update set
+    arrival_date = excluded.arrival_date, arrival_time = excluded.arrival_time,
+    arrival_mode = excluded.arrival_mode, arrival_number = excluded.arrival_number,
+    departure_date = excluded.departure_date, departure_time = excluded.departure_time,
+    departure_mode = excluded.departure_mode, departure_number = excluded.departure_number,
+    notes = excluded.notes, updated_at = now();
+end;
+$$;
+revoke all on function wd_save_travel_details(text, uuid, date, time, text, text, date, time, text, text, text) from public;
+grant execute on function wd_save_travel_details(text, uuid, date, time, text, text, date, time, text, text, text) to anon, authenticated;
+
+create or replace function wd_subscribe_push(p_code text, p_endpoint text, p_p256dh text, p_auth text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+begin
+  perform wd_assert_family(v_code);
+  insert into wd_push_subscriptions (family_code, endpoint, p256dh, auth)
+  values (v_code, p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update set family_code = excluded.family_code, p256dh = excluded.p256dh, auth = excluded.auth;
+end;
+$$;
+revoke all on function wd_subscribe_push(text, text, text, text) from public;
+grant execute on function wd_subscribe_push(text, text, text, text) to anon, authenticated;
+
+create or replace function wd_get_gallery(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+begin
+  perform wd_assert_family(v_code);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', id, 'uploader_name', uploader_name, 'storage_path', storage_path, 'created_at', created_at
+    ) order by created_at desc)
+    from wd_gallery_photos
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function wd_get_gallery(text) from public;
+grant execute on function wd_get_gallery(text) to anon, authenticated;
+
+create or replace function wd_add_gallery_photo(p_code text, p_uploader_name text, p_storage_path text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+  v_id uuid;
+begin
+  perform wd_assert_family(v_code);
+  insert into wd_gallery_photos (family_code, uploader_name, storage_path)
+  values (v_code, p_uploader_name, p_storage_path)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+revoke all on function wd_add_gallery_photo(text, text, text) from public;
+grant execute on function wd_add_gallery_photo(text, text, text) to anon, authenticated;
+
+-- ==========================================
+-- Admin RPCs
+-- ==========================================
+
+create or replace function wd_admin_login(p_pin text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hash text;
+  v_token uuid;
+begin
+  select pin_hash into v_hash from wd_admin_secret where id = 1;
+  if v_hash is null or v_hash <> extensions.crypt(p_pin, v_hash) then
+    raise exception 'Incorrect PIN.';
+  end if;
+  delete from wd_admin_sessions where expires_at < now();
+  insert into wd_admin_sessions default values returning token into v_token;
+  return v_token;
+end;
+$$;
+revoke all on function wd_admin_login(text) from public;
+grant execute on function wd_admin_login(text) to anon, authenticated;
+
+create or replace function wd_admin_list_families(p_token uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'code', f.code, 'family_name', f.family_name,
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'room_no', m.room_no, 'sort_order', m.sort_order) order by m.sort_order, m.name)
+        from wd_members m where m.family_code = f.code
+      ), '[]'::jsonb)
+    ) order by f.created_at desc)
+    from wd_families f
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function wd_admin_list_families(uuid) from public;
+grant execute on function wd_admin_list_families(uuid) to anon, authenticated;
+
+create or replace function wd_admin_create_family(p_token uuid, p_code text, p_family_name text, p_member_names text[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+  v_name text;
+  v_i int := 0;
+begin
+  perform wd_assert_admin(p_token);
+  insert into wd_families (code, family_name) values (v_code, p_family_name);
+  foreach v_name in array p_member_names loop
+    if trim(v_name) <> '' then
+      insert into wd_members (family_code, name, sort_order) values (v_code, trim(v_name), v_i);
+      v_i := v_i + 1;
+    end if;
+  end loop;
+end;
+$$;
+revoke all on function wd_admin_create_family(uuid, text, text, text[]) from public;
+grant execute on function wd_admin_create_family(uuid, text, text, text[]) to anon, authenticated;
+
+create or replace function wd_admin_delete_family(p_token uuid, p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  delete from wd_families where code = lower(trim(p_code));
+end;
+$$;
+revoke all on function wd_admin_delete_family(uuid, text) from public;
+grant execute on function wd_admin_delete_family(uuid, text) to anon, authenticated;
+
+create or replace function wd_admin_add_member(p_token uuid, p_code text, p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_next_sort int;
+begin
+  perform wd_assert_admin(p_token);
+  select coalesce(max(sort_order) + 1, 0) into v_next_sort from wd_members where family_code = lower(trim(p_code));
+  insert into wd_members (family_code, name, sort_order) values (lower(trim(p_code)), trim(p_name), v_next_sort)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+revoke all on function wd_admin_add_member(uuid, text, text) from public;
+grant execute on function wd_admin_add_member(uuid, text, text) to anon, authenticated;
+
+create or replace function wd_admin_delete_member(p_token uuid, p_member_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  delete from wd_members where id = p_member_id;
+end;
+$$;
+revoke all on function wd_admin_delete_member(uuid, uuid) from public;
+grant execute on function wd_admin_delete_member(uuid, uuid) to anon, authenticated;
+
+create or replace function wd_admin_set_room(p_token uuid, p_member_id uuid, p_room_no text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  update wd_members set room_no = p_room_no where id = p_member_id;
+end;
+$$;
+revoke all on function wd_admin_set_room(uuid, uuid, text) from public;
+grant execute on function wd_admin_set_room(uuid, uuid, text) to anon, authenticated;
+
+create or replace function wd_admin_upsert_itinerary(
+  p_token uuid, p_id uuid, p_event_name text, p_event_date date,
+  p_start_time time, p_end_time time, p_venue text, p_menu text, p_dress_code text, p_sort_order int
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  perform wd_assert_admin(p_token);
+  if p_id is null then
+    insert into wd_itinerary (event_name, event_date, start_time, end_time, venue, menu, dress_code, sort_order)
+    values (p_event_name, p_event_date, p_start_time, p_end_time, p_venue, p_menu, p_dress_code, coalesce(p_sort_order, 0))
+    returning id into v_id;
+  else
+    update wd_itinerary set
+      event_name = p_event_name, event_date = p_event_date, start_time = p_start_time, end_time = p_end_time,
+      venue = p_venue, menu = p_menu, dress_code = p_dress_code, sort_order = coalesce(p_sort_order, sort_order)
+    where id = p_id
+    returning id into v_id;
+  end if;
+  return v_id;
+end;
+$$;
+revoke all on function wd_admin_upsert_itinerary(uuid, uuid, text, date, time, time, text, text, text, int) from public;
+grant execute on function wd_admin_upsert_itinerary(uuid, uuid, text, date, time, time, text, text, text, int) to anon, authenticated;
+
+create or replace function wd_admin_delete_itinerary(p_token uuid, p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  delete from wd_itinerary where id = p_id;
+end;
+$$;
+revoke all on function wd_admin_delete_itinerary(uuid, uuid) from public;
+grant execute on function wd_admin_delete_itinerary(uuid, uuid) to anon, authenticated;
+
+create or replace function wd_admin_post_announcement(p_token uuid, p_title text, p_message text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  perform wd_assert_admin(p_token);
+  insert into wd_announcements (title, message) values (p_title, p_message) returning id into v_id;
+  return v_id;
+end;
+$$;
+revoke all on function wd_admin_post_announcement(uuid, text, text) from public;
+grant execute on function wd_admin_post_announcement(uuid, text, text) to anon, authenticated;
+
+create or replace function wd_admin_list_gallery(p_token uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', id, 'family_code', family_code, 'uploader_name', uploader_name, 'storage_path', storage_path, 'created_at', created_at
+    ) order by created_at desc)
+    from wd_gallery_photos
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function wd_admin_list_gallery(uuid) from public;
+grant execute on function wd_admin_list_gallery(uuid) to anon, authenticated;
+
+-- Photo deletion (DB row + storage object) is handled entirely by the
+-- wd-admin-delete-photo Edge Function (service role), not a Postgres RPC -
+-- an RPC here could only ever delete the metadata row, not the storage
+-- object itself, leaving orphaned files.
+
+-- One-time: set the admin PIN (bcrypt via pgcrypto, lives in `extensions` schema on this project).
+insert into wd_admin_secret (id, pin_hash) values (1, extensions.crypt('@AumSrashti27', extensions.gen_salt('bf')))
+on conflict (id) do update set pin_hash = excluded.pin_hash;

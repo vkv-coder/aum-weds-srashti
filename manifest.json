@@ -1,0 +1,14 @@
+{
+  "name": "Aum weds Srashti",
+  "short_name": "Aum-Srashti",
+  "description": "Wedding guest app for Aum weds Srashti - itinerary, travel details, rooms, gallery.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFF8EE",
+  "theme_color": "#7A1230",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
