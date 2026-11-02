@@ -90,7 +90,7 @@ async function loadFamilies() {
       </div>
       ${(f.members || []).map(m => `
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-          <span style="min-width:120px;">${escapeHtml(m.name)}</span>
+          <span style="min-width:150px;">${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></span>
           <input type="text" placeholder="Room no." value="${escapeHtml(m.room_no || '')}" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="room-${m.id}">
           <button class="btn-secondary btn-sm" onclick="saveRoom('${m.id}')">Save Room</button>
           <button class="btn-danger btn-sm" onclick="deleteMember('${m.id}','${f.code}')">Remove</button>

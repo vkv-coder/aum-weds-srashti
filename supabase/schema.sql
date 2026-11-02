@@ -21,9 +21,41 @@ create table if not exists wd_members (
   name text not null,
   room_no text,
   sort_order int not null default 0,
+  member_no int,
   created_at timestamptz not null default now()
 );
 create index if not exists wd_members_family_idx on wd_members(family_code);
+
+-- member_no: a permanent per-family sequence number (v001/1, v001/2, ...)
+-- assigned once at creation and never recalculated, so it stays a stable
+-- reference for a specific person even if someone else is later removed.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_name = 'wd_members' and column_name = 'member_no'
+  ) then
+    alter table wd_members add column member_no int;
+  end if;
+end $$;
+
+update wd_members m set member_no = sub.rn
+from (
+  select id, row_number() over (partition by family_code order by sort_order, created_at) as rn
+  from wd_members where member_no is null
+) sub
+where m.id = sub.id and m.member_no is null;
+
+alter table wd_members alter column member_no set not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'wd_members_family_member_no_key'
+  ) then
+    alter table wd_members add constraint wd_members_family_member_no_key unique (family_code, member_no);
+  end if;
+end $$;
 
 create table if not exists wd_travel_details (
   member_id uuid primary key references wd_members(id) on delete cascade,
@@ -176,6 +208,7 @@ begin
         'id', m.id,
         'name', m.name,
         'room_no', m.room_no,
+        'member_code', v_family.code || '/' || m.member_no,
         'travel', (
           select jsonb_build_object(
             'arrival_date', t.arrival_date, 'arrival_time', t.arrival_time,
@@ -329,7 +362,10 @@ begin
     select jsonb_agg(jsonb_build_object(
       'code', f.code, 'family_name', f.family_name,
       'members', coalesce((
-        select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'room_no', m.room_no, 'sort_order', m.sort_order) order by m.sort_order, m.name)
+        select jsonb_agg(jsonb_build_object(
+          'id', m.id, 'name', m.name, 'room_no', m.room_no, 'sort_order', m.sort_order,
+          'member_code', f.code || '/' || m.member_no
+        ) order by m.sort_order, m.name)
         from wd_members m where m.family_code = f.code
       ), '[]'::jsonb)
     ) order by f.created_at desc)
@@ -355,8 +391,8 @@ begin
   insert into wd_families (code, family_name) values (v_code, p_family_name);
   foreach v_name in array p_member_names loop
     if trim(v_name) <> '' then
-      insert into wd_members (family_code, name, sort_order) values (v_code, trim(v_name), v_i);
       v_i := v_i + 1;
+      insert into wd_members (family_code, name, sort_order, member_no) values (v_code, trim(v_name), v_i - 1, v_i);
     end if;
   end loop;
 end;
@@ -386,11 +422,15 @@ set search_path = public
 as $$
 declare
   v_id uuid;
+  v_code text := lower(trim(p_code));
   v_next_sort int;
+  v_next_member_no int;
 begin
   perform wd_assert_admin(p_token);
-  select coalesce(max(sort_order) + 1, 0) into v_next_sort from wd_members where family_code = lower(trim(p_code));
-  insert into wd_members (family_code, name, sort_order) values (lower(trim(p_code)), trim(p_name), v_next_sort)
+  select coalesce(max(sort_order) + 1, 0), coalesce(max(member_no) + 1, 1)
+    into v_next_sort, v_next_member_no
+    from wd_members where family_code = v_code;
+  insert into wd_members (family_code, name, sort_order, member_no) values (v_code, trim(p_name), v_next_sort, v_next_member_no)
   returning id into v_id;
   return v_id;
 end;

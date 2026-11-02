@@ -183,7 +183,7 @@ function renderFamilyPage(container) {
   `;
   document.getElementById('members-list').innerHTML = members.map(m => `
     <div class="member-row">
-      <div class="member-name">${escapeHtml(m.name)}</div>
+      <div class="member-name">${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></div>
       ${m.room_no ? `<div class="room-badge">🛏️ Room ${escapeHtml(m.room_no)}</div>` : `<div class="form-hint">Room not assigned yet</div>`}
       <div style="margin-top:10px;">
         <button class="btn-secondary btn-sm" onclick="openTravelForm('${m.id}')">✈️ ${m.travel ? 'Edit' : 'Add'} Travel Details</button>
