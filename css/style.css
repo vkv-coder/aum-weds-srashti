@@ -132,6 +132,13 @@ body {
 .footer-links a { color: var(--primary); font-size: 12px; margin: 0 6px; }
 .support-line { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .support-line a { color: var(--primary); }
+
+/* login-screen/admin-login-screen footers sit on the dark gradient, not the white card - need light text instead of the default muted/dark colors */
+#login-screen .app-footer, #admin-login-screen .app-footer { color: rgba(255,255,255,0.85); }
+#login-screen .support-line, #admin-login-screen .support-line { color: rgba(255,255,255,0.85); }
+#login-screen .support-line a, #admin-login-screen .support-line a,
+#login-screen .anyapps-badge, #admin-login-screen .anyapps-badge { color: #fff; }
+#login-screen .powered-by, #admin-login-screen .powered-by { color: rgba(255,255,255,0.7); }
 .powered-by { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
 .anyapps-badge { color: var(--primary); font-weight: 700; text-decoration: none; }
 .anyapps-badge .accent { color: var(--accent); }
