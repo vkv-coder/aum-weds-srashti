@@ -94,11 +94,14 @@ async function loadFamilies() {
         <button class="btn-danger btn-sm" onclick="deleteFamily('${f.code}')">Delete</button>
       </div>
       ${(f.members || []).map(m => `
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-          <span style="min-width:150px;">${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></span>
-          <input type="text" placeholder="Room no." value="${escapeHtml(m.room_no || '')}" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="room-${m.id}">
-          <button class="btn-secondary btn-sm" onclick="saveRoom('${m.id}')">Save Room</button>
-          <button class="btn-danger btn-sm" onclick="deleteMember('${m.id}','${f.code}')">Remove</button>
+        <div style="margin-top:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="min-width:150px;">${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></span>
+            <input type="text" placeholder="Room no." value="${escapeHtml(m.room_no || '')}" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="room-${m.id}">
+            <button class="btn-secondary btn-sm" onclick="saveRoom('${m.id}')">Save Room</button>
+            <button class="btn-danger btn-sm" onclick="deleteMember('${m.id}','${f.code}')">Remove</button>
+          </div>
+          ${m.remarks ? `<div class="form-hint" style="margin-top:2px;">📝 ${escapeHtml(m.remarks)}</div>` : ''}
         </div>
       `).join('')}
       <div style="margin-top:10px;">
@@ -302,12 +305,32 @@ function renderTravelRow(m, kind) {
   const time = kind === 'arrival' ? t.arrival_time : t.departure_time;
   const mode = kind === 'arrival' ? t.arrival_mode : t.departure_mode;
   const number = kind === 'arrival' ? t.arrival_number : t.departure_number;
+  const vehicleNo = kind === 'arrival' ? t.arrival_vehicle_no : t.departure_vehicle_no;
+  const driverContact = kind === 'arrival' ? t.arrival_driver_contact : t.departure_driver_contact;
+  const fieldId = `${kind}-${m.id}`;
   return `
     <div class="itinerary-item">
       <div class="ev-name">${formatDate(date)}${time ? ' · ' + formatTime(time) : ''} - ${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></div>
       <div class="ev-meta">${escapeHtml(m.family_name)}${mode ? ' · ' + escapeHtml(mode) : ''}${number ? ' · ' + escapeHtml(number) : ''}</div>
+      ${m.remarks ? `<div class="ev-meta">📝 ${escapeHtml(m.remarks)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <input type="text" id="vehicle-${fieldId}" placeholder="Vehicle no." value="${escapeHtml(vehicleNo || '')}" style="width:130px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+        <input type="text" id="driver-${fieldId}" placeholder="Driver contact" value="${escapeHtml(driverContact || '')}" style="width:150px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+        <button class="btn-secondary btn-sm" onclick="savePickup('${m.id}','${kind}')">Save Pickup</button>
+      </div>
     </div>
   `;
+}
+
+async function savePickup(memberId, kind) {
+  const fieldId = `${kind}-${memberId}`;
+  const vehicleNo = document.getElementById(`vehicle-${fieldId}`).value.trim();
+  const driverContact = document.getElementById(`driver-${fieldId}`).value.trim();
+  const { error } = await db.rpc('wd_admin_set_pickup', {
+    p_token: adminToken(), p_member_id: memberId, p_leg: kind, p_vehicle_no: vehicleNo, p_driver_contact: driverContact
+  });
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('✅ Pickup saved');
 }
 
 function csvEscape(val) {
@@ -428,6 +451,19 @@ async function deleteItinerary(id) {
 async function renderAnnouncementsTab(container) {
   container.innerHTML = `
     <div class="card">
+      <div class="card-title">Help Contact Numbers (shown to every guest)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:140px;"><label>Contact 1 Name</label><input type="text" id="c1-label" placeholder="e.g. Host - Vijay"></div>
+        <div class="form-group" style="flex:1;min-width:140px;"><label>Contact 1 Phone</label><input type="text" id="c1-phone" placeholder="e.g. 98765xxxxx"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:140px;"><label>Contact 2 Name</label><input type="text" id="c2-label" placeholder="e.g. Coordinator - Rahul"></div>
+        <div class="form-group" style="flex:1;min-width:140px;"><label>Contact 2 Phone</label><input type="text" id="c2-phone" placeholder="e.g. 98765xxxxx"></div>
+      </div>
+      <button class="btn-primary btn-sm" onclick="saveContacts()">Save Contacts</button>
+      <div class="error-msg" id="contacts-error"></div>
+    </div>
+    <div class="card">
       <div class="card-title">Post an Announcement</div>
       <div class="form-group"><label>Title</label><input type="text" id="an-title"></div>
       <div class="form-group"><label>Message</label><textarea id="an-message" rows="3"></textarea></div>
@@ -436,7 +472,31 @@ async function renderAnnouncementsTab(container) {
     </div>
     <div class="card"><div class="card-title">Recent Announcements</div><div id="announcements-admin-list">Loading...</div></div>
   `;
+  await loadContacts();
   await loadAnnouncementsAdmin();
+}
+
+async function loadContacts() {
+  const { data } = await db.from('wd_contact_info').select('*').eq('id', 1).maybeSingle();
+  if (!data) return;
+  document.getElementById('c1-label').value = data.contact1_label || '';
+  document.getElementById('c1-phone').value = data.contact1_phone || '';
+  document.getElementById('c2-label').value = data.contact2_label || '';
+  document.getElementById('c2-phone').value = data.contact2_phone || '';
+}
+
+async function saveContacts() {
+  const errEl = document.getElementById('contacts-error');
+  errEl.textContent = '';
+  const { error } = await db.rpc('wd_admin_set_contacts', {
+    p_token: adminToken(),
+    p_c1_label: document.getElementById('c1-label').value.trim() || null,
+    p_c1_phone: document.getElementById('c1-phone').value.trim() || null,
+    p_c2_label: document.getElementById('c2-label').value.trim() || null,
+    p_c2_phone: document.getElementById('c2-phone').value.trim() || null
+  });
+  if (error) { errEl.textContent = error.message; return; }
+  showToast('✅ Contact numbers saved');
 }
 
 async function loadAnnouncementsAdmin() {

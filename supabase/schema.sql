@@ -26,6 +26,11 @@ create table if not exists wd_members (
 );
 create index if not exists wd_members_family_idx on wd_members(family_code);
 
+-- Guest-editable special-requirement note (wheelchair, creche, etc.) -
+-- deliberately a separate concept from wd_travel_details.notes, which is
+-- about the journey itself, not accessibility/venue needs.
+alter table wd_members add column if not exists remarks text;
+
 -- member_no: a permanent per-family sequence number (v001/1, v001/2, ...)
 -- assigned once at creation and never recalculated, so it stays a stable
 -- reference for a specific person even if someone else is later removed.
@@ -71,6 +76,14 @@ create table if not exists wd_travel_details (
   updated_at timestamptz not null default now()
 );
 
+-- Pickup/drop-off assignment: admin-only fields (never written by the
+-- guest-facing wd_save_travel_details RPC), shown read-only to the guest
+-- so they know who's collecting them.
+alter table wd_travel_details add column if not exists arrival_vehicle_no text;
+alter table wd_travel_details add column if not exists arrival_driver_contact text;
+alter table wd_travel_details add column if not exists departure_vehicle_no text;
+alter table wd_travel_details add column if not exists departure_driver_contact text;
+
 create table if not exists wd_itinerary (
   id uuid primary key default gen_random_uuid(),
   event_name text not null,
@@ -89,6 +102,18 @@ create table if not exists wd_announcements (
   title text not null,
   message text not null,
   created_at timestamptz not null default now()
+);
+
+-- Two general help-contact numbers shown to every guest. Public read
+-- (phone numbers meant to be shared, same reasoning as itinerary/
+-- announcements), admin-write only.
+create table if not exists wd_contact_info (
+  id int primary key default 1,
+  contact1_label text,
+  contact1_phone text,
+  contact2_label text,
+  contact2_phone text,
+  constraint wd_contact_info_single_row check (id = 1)
 );
 
 create table if not exists wd_gallery_photos (
@@ -129,13 +154,15 @@ alter table wd_gallery_photos enable row level security;
 alter table wd_push_subscriptions enable row level security;
 alter table wd_admin_secret enable row level security;
 alter table wd_admin_sessions enable row level security;
+alter table wd_contact_info enable row level security;
 
 revoke all on wd_families, wd_members, wd_travel_details, wd_gallery_photos,
   wd_push_subscriptions, wd_admin_secret, wd_admin_sessions
   from anon, authenticated;
 
--- Itinerary & announcements: nothing sensitive, readable without a code so
--- the admin panel preview and any future "public teaser" page both work.
+-- Itinerary, announcements & contact info: nothing sensitive, readable
+-- without a code so the admin panel preview and any future "public
+-- teaser" page both work.
 drop policy if exists wd_itinerary_read on wd_itinerary;
 create policy wd_itinerary_read on wd_itinerary for select using (true);
 revoke insert, update, delete on wd_itinerary from anon, authenticated;
@@ -144,7 +171,11 @@ drop policy if exists wd_announcements_read on wd_announcements;
 create policy wd_announcements_read on wd_announcements for select using (true);
 revoke insert, update, delete on wd_announcements from anon, authenticated;
 
-grant select on wd_itinerary, wd_announcements to anon, authenticated;
+drop policy if exists wd_contact_info_read on wd_contact_info;
+create policy wd_contact_info_read on wd_contact_info for select using (true);
+revoke insert, update, delete on wd_contact_info from anon, authenticated;
+
+grant select on wd_itinerary, wd_announcements, wd_contact_info to anon, authenticated;
 
 -- ==========================================
 -- Internal helpers (not granted to anon/authenticated directly)
@@ -209,12 +240,15 @@ begin
         'name', m.name,
         'room_no', m.room_no,
         'member_code', v_family.code || '/' || m.member_no,
+        'remarks', m.remarks,
         'travel', (
           select jsonb_build_object(
             'arrival_date', t.arrival_date, 'arrival_time', t.arrival_time,
             'arrival_mode', t.arrival_mode, 'arrival_number', t.arrival_number,
+            'arrival_vehicle_no', t.arrival_vehicle_no, 'arrival_driver_contact', t.arrival_driver_contact,
             'departure_date', t.departure_date, 'departure_time', t.departure_time,
             'departure_mode', t.departure_mode, 'departure_number', t.departure_number,
+            'departure_vehicle_no', t.departure_vehicle_no, 'departure_driver_contact', t.departure_driver_contact,
             'notes', t.notes
           ) from wd_travel_details t where t.member_id = m.id
         )
@@ -264,6 +298,24 @@ end;
 $$;
 revoke all on function wd_save_travel_details(text, uuid, date, time, text, text, date, time, text, text, text) from public;
 grant execute on function wd_save_travel_details(text, uuid, date, time, text, text, date, time, text, text, text) to anon, authenticated;
+
+create or replace function wd_save_remarks(p_code text, p_member_id uuid, p_remarks text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lower(trim(p_code));
+begin
+  if not exists (select 1 from wd_members where id = p_member_id and family_code = v_code) then
+    raise exception 'Member does not belong to this family code.';
+  end if;
+  update wd_members set remarks = nullif(trim(p_remarks), '') where id = p_member_id;
+end;
+$$;
+revoke all on function wd_save_remarks(text, uuid, text) from public;
+grant execute on function wd_save_remarks(text, uuid, text) to anon, authenticated;
 
 create or replace function wd_subscribe_push(p_code text, p_endpoint text, p_p256dh text, p_auth text)
 returns void
@@ -364,7 +416,7 @@ begin
       'members', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', m.id, 'name', m.name, 'room_no', m.room_no, 'sort_order', m.sort_order,
-          'member_code', f.code || '/' || m.member_no
+          'member_code', f.code || '/' || m.member_no, 'remarks', m.remarks
         ) order by m.sort_order, m.name)
         from wd_members m where m.family_code = f.code
       ), '[]'::jsonb)
@@ -397,12 +449,15 @@ begin
       'member_code', m.family_code || '/' || m.member_no,
       'family_code', m.family_code,
       'family_name', f.family_name,
+      'remarks', m.remarks,
       'travel', (
         select jsonb_build_object(
           'arrival_date', t.arrival_date, 'arrival_time', t.arrival_time,
           'arrival_mode', t.arrival_mode, 'arrival_number', t.arrival_number,
+          'arrival_vehicle_no', t.arrival_vehicle_no, 'arrival_driver_contact', t.arrival_driver_contact,
           'departure_date', t.departure_date, 'departure_time', t.departure_time,
           'departure_mode', t.departure_mode, 'departure_number', t.departure_number,
+          'departure_vehicle_no', t.departure_vehicle_no, 'departure_driver_contact', t.departure_driver_contact,
           'notes', t.notes
         ) from wd_travel_details t where t.member_id = m.id
       )
@@ -504,6 +559,54 @@ end;
 $$;
 revoke all on function wd_admin_set_room(uuid, uuid, text) from public;
 grant execute on function wd_admin_set_room(uuid, uuid, text) to anon, authenticated;
+
+-- Pickup/drop-off assignment (vehicle no. + driver contact). Upserts an
+-- empty wd_travel_details row first so admin can assign a pickup even
+-- before the guest has submitted their own arrival/departure details.
+create or replace function wd_admin_set_pickup(p_token uuid, p_member_id uuid, p_leg text, p_vehicle_no text, p_driver_contact text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  if p_leg not in ('arrival', 'departure') then
+    raise exception 'Invalid leg - must be arrival or departure.';
+  end if;
+
+  insert into wd_travel_details (member_id) values (p_member_id)
+  on conflict (member_id) do nothing;
+
+  if p_leg = 'arrival' then
+    update wd_travel_details set arrival_vehicle_no = p_vehicle_no, arrival_driver_contact = p_driver_contact, updated_at = now()
+    where member_id = p_member_id;
+  else
+    update wd_travel_details set departure_vehicle_no = p_vehicle_no, departure_driver_contact = p_driver_contact, updated_at = now()
+    where member_id = p_member_id;
+  end if;
+end;
+$$;
+revoke all on function wd_admin_set_pickup(uuid, uuid, text, text, text) from public;
+grant execute on function wd_admin_set_pickup(uuid, uuid, text, text, text) to anon, authenticated;
+
+create or replace function wd_admin_set_contacts(p_token uuid, p_c1_label text, p_c1_phone text, p_c2_label text, p_c2_phone text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  insert into wd_contact_info (id, contact1_label, contact1_phone, contact2_label, contact2_phone)
+  values (1, p_c1_label, p_c1_phone, p_c2_label, p_c2_phone)
+  on conflict (id) do update set
+    contact1_label = excluded.contact1_label, contact1_phone = excluded.contact1_phone,
+    contact2_label = excluded.contact2_label, contact2_phone = excluded.contact2_phone;
+end;
+$$;
+revoke all on function wd_admin_set_contacts(uuid, text, text, text, text) from public;
+grant execute on function wd_admin_set_contacts(uuid, text, text, text, text) to anon, authenticated;
 
 create or replace function wd_admin_upsert_itinerary(
   p_token uuid, p_id uuid, p_event_name text, p_event_date date,

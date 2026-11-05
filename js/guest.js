@@ -72,7 +72,11 @@ function goTab(tabId) {
 
 // ---------- Itinerary ----------
 async function renderHomePage(container) {
-  container.innerHTML = `<div class="card"><div class="card-title">Function Itinerary</div><div id="itinerary-list">Loading...</div></div>`;
+  container.innerHTML = `
+    <div class="card" id="contact-card"></div>
+    <div class="card"><div class="card-title">Function Itinerary</div><div id="itinerary-list">Loading...</div></div>
+  `;
+  renderContactCard();
   const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date');
   const listEl = document.getElementById('itinerary-list');
   if (error || !data || data.length === 0) {
@@ -91,6 +95,18 @@ async function renderHomePage(container) {
       ${ev.menu ? `<div class="ev-meta">🍽️ Menu: ${escapeHtml(ev.menu)}</div>` : ''}
     </div>
   `).join('');
+}
+
+async function renderContactCard() {
+  const el = document.getElementById('contact-card');
+  if (!el) return;
+  const { data } = await db.from('wd_contact_info').select('*').eq('id', 1).maybeSingle();
+  if (!data || (!data.contact1_phone && !data.contact2_phone)) { el.style.display = 'none'; return; }
+  el.innerHTML = `
+    <div class="card-title">Need Help?</div>
+    ${data.contact1_phone ? `<div class="ev-meta">📞 ${escapeHtml(data.contact1_label || 'Contact')}: <a href="tel:${escapeHtml(data.contact1_phone)}">${escapeHtml(data.contact1_phone)}</a></div>` : ''}
+    ${data.contact2_phone ? `<div class="ev-meta">📞 ${escapeHtml(data.contact2_label || 'Contact')}: <a href="tel:${escapeHtml(data.contact2_phone)}">${escapeHtml(data.contact2_phone)}</a></div>` : ''}
+  `;
 }
 
 // ---------- Announcements ----------
@@ -189,16 +205,42 @@ function renderFamilyPage(container) {
         <button class="btn-secondary btn-sm" onclick="openTravelForm('${m.id}')">✈️ ${m.travel ? 'Edit' : 'Add'} Travel Details</button>
       </div>
       ${m.travel ? renderTravelSummary(m.travel) : ''}
+      <div style="margin-top:10px;">
+        <label class="form-hint" style="display:block;margin-bottom:4px;">Special requirement (optional) - e.g. wheelchair, creche</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="remarks-${m.id}" value="${escapeHtml(m.remarks || '')}" placeholder="e.g. Needs wheelchair access" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+          <button class="btn-secondary btn-sm" onclick="saveRemarks('${m.id}')">Save</button>
+        </div>
+      </div>
     </div>
   `).join('');
 }
 
 function renderTravelSummary(t) {
   const parts = [];
-  if (t.arrival_date) parts.push(`Arrives ${formatDate(t.arrival_date)}${t.arrival_time ? ' ' + formatTime(t.arrival_time) : ''}${t.arrival_mode ? ' by ' + escapeHtml(t.arrival_mode) : ''}${t.arrival_number ? ' (' + escapeHtml(t.arrival_number) + ')' : ''}`);
-  if (t.departure_date) parts.push(`Departs ${formatDate(t.departure_date)}${t.departure_time ? ' ' + formatTime(t.departure_time) : ''}${t.departure_mode ? ' by ' + escapeHtml(t.departure_mode) : ''}${t.departure_number ? ' (' + escapeHtml(t.departure_number) + ')' : ''}`);
+  if (t.arrival_date) {
+    parts.push(`Arrives ${formatDate(t.arrival_date)}${t.arrival_time ? ' ' + formatTime(t.arrival_time) : ''}${t.arrival_mode ? ' by ' + escapeHtml(t.arrival_mode) : ''}${t.arrival_number ? ' (' + escapeHtml(t.arrival_number) + ')' : ''}`);
+    if (t.arrival_vehicle_no || t.arrival_driver_contact) {
+      parts.push(`🚗 Pickup: ${[t.arrival_vehicle_no ? escapeHtml(t.arrival_vehicle_no) : '', t.arrival_driver_contact ? 'Driver ' + escapeHtml(t.arrival_driver_contact) : ''].filter(Boolean).join(' · ')}`);
+    }
+  }
+  if (t.departure_date) {
+    parts.push(`Departs ${formatDate(t.departure_date)}${t.departure_time ? ' ' + formatTime(t.departure_time) : ''}${t.departure_mode ? ' by ' + escapeHtml(t.departure_mode) : ''}${t.departure_number ? ' (' + escapeHtml(t.departure_number) + ')' : ''}`);
+    if (t.departure_vehicle_no || t.departure_driver_contact) {
+      parts.push(`🚗 Drop-off: ${[t.departure_vehicle_no ? escapeHtml(t.departure_vehicle_no) : '', t.departure_driver_contact ? 'Driver ' + escapeHtml(t.departure_driver_contact) : ''].filter(Boolean).join(' · ')}`);
+    }
+  }
   if (parts.length === 0) return '';
   return `<div class="form-hint" style="margin-top:8px;">${parts.join('<br>')}</div>`;
+}
+
+async function saveRemarks(memberId) {
+  const val = document.getElementById(`remarks-${memberId}`).value;
+  const { error } = await db.rpc('wd_save_remarks', { p_code: currentFamily.code, p_member_id: memberId, p_remarks: val });
+  if (error) { showToast(error.message, 'error'); return; }
+  const member = (currentFamily.members || []).find(x => x.id === memberId);
+  if (member) member.remarks = val.trim() || null;
+  showToast('✅ Saved');
 }
 
 function openTravelForm(memberId) {
