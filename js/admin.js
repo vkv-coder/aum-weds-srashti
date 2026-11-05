@@ -60,8 +60,9 @@ function renderAdminNavTabs() {
   ).join('');
 }
 
-function renderDashboardTab(container) {
+async function renderDashboardTab(container) {
   container.innerHTML = `
+    <div class="card" id="admin-contact-card"></div>
     <div class="card">
       <div class="card-title">Dashboard</div>
       <div class="dash-grid">
@@ -73,6 +74,18 @@ function renderDashboardTab(container) {
       </div>
     </div>
   `;
+  const { data } = await db.from('wd_contact_info').select('*').eq('id', 1).maybeSingle();
+  const el = document.getElementById('admin-contact-card');
+  if (!el) return;
+  if (!data || (!data.contact1_phone && !data.contact2_phone)) {
+    el.innerHTML = `<div class="card-title">Help Contact Numbers</div><div class="form-hint">Not set yet - add them under Announcements.</div>`;
+  } else {
+    el.innerHTML = `
+      <div class="card-title">Help Contact Numbers (shown to guests)</div>
+      ${data.contact1_phone ? `<div class="ev-meta">📞 ${escapeHtml(data.contact1_label || 'Contact')}: ${escapeHtml(data.contact1_phone)}</div>` : ''}
+      ${data.contact2_phone ? `<div class="ev-meta">📞 ${escapeHtml(data.contact2_label || 'Contact')}: ${escapeHtml(data.contact2_phone)}</div>` : ''}
+    `;
+  }
 }
 
 function goAdminTab(tabId) {
@@ -193,7 +206,7 @@ async function renderRoomsTab(container) {
   container.innerHTML = `
     <div class="card">
       <div class="card-title">Rooms</div>
-      <div class="form-group"><input type="text" id="room-search" placeholder="Search by guest name or code (e.g. v001/2)..." oninput="renderRoomGroups()"></div>
+      <div class="form-group"><input type="text" id="room-search" placeholder="Search by guest name, code (e.g. v001/2), or room no..." oninput="renderRoomGroups()"></div>
       <div id="rooms-list">Loading...</div>
     </div>
   `;
@@ -212,7 +225,8 @@ function renderRoomGroups() {
     members = members.filter(m =>
       m.name.toLowerCase().includes(query) ||
       m.member_code.toLowerCase().includes(query) ||
-      m.family_name.toLowerCase().includes(query)
+      m.family_name.toLowerCase().includes(query) ||
+      (m.room_no && m.room_no.toLowerCase().includes(query))
     );
   }
   if (members.length === 0) {

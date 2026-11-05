@@ -64,6 +64,7 @@ function renderNavTabs() {
 
 function renderDashboardPage(container) {
   container.innerHTML = `
+    <div class="card" id="contact-card"></div>
     <div class="card">
       <div class="card-title">Dashboard</div>
       <div class="dash-grid">
@@ -75,6 +76,7 @@ function renderDashboardPage(container) {
       </div>
     </div>
   `;
+  renderContactCard();
 }
 
 function goTab(tabId) {
