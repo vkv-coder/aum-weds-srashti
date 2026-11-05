@@ -35,7 +35,7 @@ function enterApp() {
   document.getElementById('main-screen').style.display = 'block';
   document.getElementById('family-name-badge').textContent = currentFamily.family_name;
   registerServiceWorker();
-  goTab('home');
+  goTab('dashboard');
 }
 
 async function tryAutoLogin() {
@@ -47,24 +47,42 @@ async function tryAutoLogin() {
   enterApp();
 }
 
+const GUEST_TABS = [
+  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'home', label: 'Itinerary', icon: '📅' },
+  { id: 'announcements', label: 'News', icon: '🔔' },
+  { id: 'family', label: 'My Family', icon: '👪' },
+  { id: 'gallery', label: 'Gallery', icon: '📸' }
+];
+
 function renderNavTabs() {
-  const tabs = [
-    { id: 'home', label: 'Itinerary' },
-    { id: 'announcements', label: 'News' },
-    { id: 'family', label: 'My Family' },
-    { id: 'gallery', label: 'Gallery' }
-  ];
   const nav = document.getElementById('nav-tabs');
-  nav.innerHTML = tabs.map(t =>
+  nav.innerHTML = GUEST_TABS.map(t =>
     `<div class="nav-tab${t.id === currentTab ? ' active' : ''}" onclick="goTab('${t.id}')">${t.label}</div>`
   ).join('');
+}
+
+function renderDashboardPage(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-title">Dashboard</div>
+      <div class="dash-grid">
+        ${GUEST_TABS.filter(t => t.id !== 'dashboard').map((t, i) => `
+          <div class="dash-tile dash-tile-${(i % 6) + 1}" onclick="goTab('${t.id}')">
+            <span class="dash-icon">${t.icon}</span>${t.label}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function goTab(tabId) {
   currentTab = tabId;
   renderNavTabs();
   const content = document.getElementById('page-content');
-  if (tabId === 'home') renderHomePage(content);
+  if (tabId === 'dashboard') renderDashboardPage(content);
+  else if (tabId === 'home') renderHomePage(content);
   else if (tabId === 'announcements') renderAnnouncementsPage(content);
   else if (tabId === 'family') renderFamilyPage(content);
   else if (tabId === 'gallery') renderGalleryPage(content);

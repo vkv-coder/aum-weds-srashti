@@ -146,3 +146,18 @@ body {
 @media (max-width: 420px) {
   .login-box { padding: 28px 20px; }
 }
+
+/* ========== DASHBOARD TILES ========== */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+.dash-tile {
+  border-radius: var(--radius); padding: 22px 14px; text-align: center; cursor: pointer;
+  color: #fff; font-weight: 700; font-size: 15px; box-shadow: var(--shadow); transition: transform 0.15s;
+}
+.dash-tile:hover { transform: translateY(-2px); }
+.dash-tile .dash-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+.dash-tile-1 { background: linear-gradient(135deg, #7A1230, #A32347); }
+.dash-tile-2 { background: linear-gradient(135deg, #B8860B, #E0C25C); }
+.dash-tile-3 { background: linear-gradient(135deg, #0F6E6E, #3FB6B6); }
+.dash-tile-4 { background: linear-gradient(135deg, #1C5A8A, #3F8FC6); }
+.dash-tile-5 { background: linear-gradient(135deg, #3E7D32, #6EBF5E); }
+.dash-tile-6 { background: linear-gradient(135deg, #8C4A1B, #C97A3F); }

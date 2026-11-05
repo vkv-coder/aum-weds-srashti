@@ -32,7 +32,7 @@ function adminToken() {
 function enterAdminApp() {
   document.getElementById('admin-login-screen').style.display = 'none';
   document.getElementById('admin-main-screen').style.display = 'block';
-  goAdminTab('families');
+  goAdminTab('dashboard');
 }
 
 async function tryAdminAutoLogin() {
@@ -43,26 +43,44 @@ async function tryAdminAutoLogin() {
   enterAdminApp();
 }
 
+const ADMIN_TABS = [
+  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'families', label: 'Families', icon: '👪' },
+  { id: 'rooms', label: 'Rooms', icon: '🛏️' },
+  { id: 'travel', label: 'Travel', icon: '✈️' },
+  { id: 'itinerary', label: 'Itinerary', icon: '📅' },
+  { id: 'announcements', label: 'Announcements', icon: '🔔' },
+  { id: 'gallery', label: 'Gallery', icon: '📸' }
+];
+
 function renderAdminNavTabs() {
-  const tabs = [
-    { id: 'families', label: 'Families' },
-    { id: 'rooms', label: 'Rooms' },
-    { id: 'travel', label: 'Travel' },
-    { id: 'itinerary', label: 'Itinerary' },
-    { id: 'announcements', label: 'Announcements' },
-    { id: 'gallery', label: 'Gallery' }
-  ];
   const nav = document.getElementById('admin-nav-tabs');
-  nav.innerHTML = tabs.map(t =>
+  nav.innerHTML = ADMIN_TABS.map(t =>
     `<div class="nav-tab${t.id === adminTab ? ' active' : ''}" onclick="goAdminTab('${t.id}')">${t.label}</div>`
   ).join('');
+}
+
+function renderDashboardTab(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-title">Dashboard</div>
+      <div class="dash-grid">
+        ${ADMIN_TABS.filter(t => t.id !== 'dashboard').map((t, i) => `
+          <div class="dash-tile dash-tile-${(i % 6) + 1}" onclick="goAdminTab('${t.id}')">
+            <span class="dash-icon">${t.icon}</span>${t.label}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function goAdminTab(tabId) {
   adminTab = tabId;
   renderAdminNavTabs();
   const content = document.getElementById('admin-page-content');
-  if (tabId === 'families') renderFamiliesTab(content);
+  if (tabId === 'dashboard') renderDashboardTab(content);
+  else if (tabId === 'families') renderFamiliesTab(content);
   else if (tabId === 'rooms') renderRoomsTab(content);
   else if (tabId === 'travel') renderTravelTab(content);
   else if (tabId === 'itinerary') renderItineraryTab(content);
@@ -217,9 +235,37 @@ function renderRoomGroup(title, members) {
   return `
     <div class="member-row">
       <div class="member-name">${escapeHtml(title)}</div>
-      ${members.map(m => `<div class="form-hint" style="margin-top:4px;">${escapeHtml(m.name)} (${escapeHtml(m.member_code)}) - ${escapeHtml(m.family_name)}</div>`).join('')}
+      ${members.map(m => `
+        <div style="margin-top:6px;">
+          <div class="form-hint">${escapeHtml(m.name)} (${escapeHtml(m.member_code)}) - ${escapeHtml(m.family_name)}${m.remarks ? ' · 📝 ' + escapeHtml(m.remarks) : ''}</div>
+          ${m.travel ? `<div class="form-hint" style="color:var(--text-light);">${compactTravelLine(m.travel)}</div>` : ''}
+        </div>
+      `).join('')}
     </div>
   `;
+}
+
+// One compact line combining arrival + departure + pickup/drop-off, used
+// by the Rooms tab so checking one guest doesn't require visiting the
+// separate Travel tab too.
+function compactTravelLine(t) {
+  if (!t) return '';
+  const parts = [];
+  if (t.arrival_date) {
+    let s = `✈️ Arr ${formatDate(t.arrival_date)}${t.arrival_time ? ' ' + formatTime(t.arrival_time) : ''}${t.arrival_mode ? ' ' + escapeHtml(t.arrival_mode) : ''}${t.arrival_number ? ' ' + escapeHtml(t.arrival_number) : ''}`;
+    if (t.arrival_vehicle_no || t.arrival_driver_contact) {
+      s += ` (🚗 ${[t.arrival_vehicle_no, t.arrival_driver_contact].filter(Boolean).map(escapeHtml).join(' / ')})`;
+    }
+    parts.push(s);
+  }
+  if (t.departure_date) {
+    let s = `Dep ${formatDate(t.departure_date)}${t.departure_time ? ' ' + formatTime(t.departure_time) : ''}${t.departure_mode ? ' ' + escapeHtml(t.departure_mode) : ''}${t.departure_number ? ' ' + escapeHtml(t.departure_number) : ''}`;
+    if (t.departure_vehicle_no || t.departure_driver_contact) {
+      s += ` (🚗 ${[t.departure_vehicle_no, t.departure_driver_contact].filter(Boolean).map(escapeHtml).join(' / ')})`;
+    }
+    parts.push(s);
+  }
+  return parts.join(' · ');
 }
 
 // ---------- Travel (arrival/departure, chronological, date-filterable, exportable) ----------
