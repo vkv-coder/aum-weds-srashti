@@ -376,6 +376,45 @@ $$;
 revoke all on function wd_admin_list_families(uuid) from public;
 grant execute on function wd_admin_list_families(uuid) to anon, authenticated;
 
+-- Flat member list across ALL families, with room + travel details, for the
+-- admin Rooms and Travel views (room-wise/guest-wise lookup, arrival-
+-- /departure-sorted manifest). wd_admin_list_families stays family-grouped
+-- for the Families tab; this is the cross-family flat shape those two
+-- reports actually need.
+create or replace function wd_admin_list_members(p_token uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', m.id,
+      'name', m.name,
+      'room_no', m.room_no,
+      'member_code', m.family_code || '/' || m.member_no,
+      'family_code', m.family_code,
+      'family_name', f.family_name,
+      'travel', (
+        select jsonb_build_object(
+          'arrival_date', t.arrival_date, 'arrival_time', t.arrival_time,
+          'arrival_mode', t.arrival_mode, 'arrival_number', t.arrival_number,
+          'departure_date', t.departure_date, 'departure_time', t.departure_time,
+          'departure_mode', t.departure_mode, 'departure_number', t.departure_number,
+          'notes', t.notes
+        ) from wd_travel_details t where t.member_id = m.id
+      )
+    ) order by f.family_name, m.sort_order, m.name)
+    from wd_members m
+    join wd_families f on f.code = m.family_code
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function wd_admin_list_members(uuid) from public;
+grant execute on function wd_admin_list_members(uuid) to anon, authenticated;
+
 create or replace function wd_admin_create_family(p_token uuid, p_code text, p_family_name text, p_member_names text[])
 returns void
 language plpgsql

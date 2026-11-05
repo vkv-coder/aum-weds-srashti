@@ -4,6 +4,7 @@
 
 const ADMIN_TOKEN_KEY = 'wd_admin_token';
 let adminFamilies = [];
+let adminMembers = [];
 let adminTab = null;
 
 async function adminLogin() {
@@ -45,6 +46,8 @@ async function tryAdminAutoLogin() {
 function renderAdminNavTabs() {
   const tabs = [
     { id: 'families', label: 'Families' },
+    { id: 'rooms', label: 'Rooms' },
+    { id: 'travel', label: 'Travel' },
     { id: 'itinerary', label: 'Itinerary' },
     { id: 'announcements', label: 'Announcements' },
     { id: 'gallery', label: 'Gallery' }
@@ -60,6 +63,8 @@ function goAdminTab(tabId) {
   renderAdminNavTabs();
   const content = document.getElementById('admin-page-content');
   if (tabId === 'families') renderFamiliesTab(content);
+  else if (tabId === 'rooms') renderRoomsTab(content);
+  else if (tabId === 'travel') renderTravelTab(content);
   else if (tabId === 'itinerary') renderItineraryTab(content);
   else if (tabId === 'announcements') renderAnnouncementsTab(content);
   else if (tabId === 'gallery') renderGalleryTab(content);
@@ -160,6 +165,95 @@ async function saveRoom(memberId) {
   const { error } = await db.rpc('wd_admin_set_room', { p_token: adminToken(), p_member_id: memberId, p_room_no: val });
   if (error) { showToast(error.message, 'error'); return; }
   showToast('✅ Room saved');
+}
+
+// ---------- Rooms (room-wise list + guest-wise search) ----------
+async function renderRoomsTab(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-title">Rooms</div>
+      <div class="form-group"><input type="text" id="room-search" placeholder="Search by guest name or code (e.g. v001/2)..." oninput="renderRoomGroups()"></div>
+      <div id="rooms-list">Loading...</div>
+    </div>
+  `;
+  const { data, error } = await db.rpc('wd_admin_list_members', { p_token: adminToken() });
+  if (error) { document.getElementById('rooms-list').innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  adminMembers = data || [];
+  renderRoomGroups();
+}
+
+function renderRoomGroups() {
+  const listEl = document.getElementById('rooms-list');
+  if (!listEl) return;
+  const query = (document.getElementById('room-search').value || '').trim().toLowerCase();
+  let members = adminMembers;
+  if (query) {
+    members = members.filter(m =>
+      m.name.toLowerCase().includes(query) ||
+      m.member_code.toLowerCase().includes(query) ||
+      m.family_name.toLowerCase().includes(query)
+    );
+  }
+  if (members.length === 0) {
+    listEl.innerHTML = `<div class="empty-state"><p>No matching guests.</p></div>`;
+    return;
+  }
+  const groups = {};
+  for (const m of members) {
+    const key = m.room_no ? m.room_no : '__unassigned__';
+    (groups[key] = groups[key] || []).push(m);
+  }
+  const roomKeys = Object.keys(groups).filter(k => k !== '__unassigned__')
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const sections = roomKeys.map(k => renderRoomGroup('🛏️ Room ' + k, groups[k]));
+  if (groups['__unassigned__']) sections.push(renderRoomGroup('❓ Room Not Assigned Yet', groups['__unassigned__']));
+  listEl.innerHTML = sections.join('');
+}
+
+function renderRoomGroup(title, members) {
+  return `
+    <div class="member-row">
+      <div class="member-name">${escapeHtml(title)}</div>
+      ${members.map(m => `<div class="form-hint" style="margin-top:4px;">${escapeHtml(m.name)} (${escapeHtml(m.member_code)}) - ${escapeHtml(m.family_name)}</div>`).join('')}
+    </div>
+  `;
+}
+
+// ---------- Travel (arrival/departure, chronological) ----------
+async function renderTravelTab(container) {
+  container.innerHTML = `
+    <div class="card"><div class="card-title">Arrivals</div><div id="arrivals-list">Loading...</div></div>
+    <div class="card"><div class="card-title">Departures</div><div id="departures-list">Loading...</div></div>
+  `;
+  const { data, error } = await db.rpc('wd_admin_list_members', { p_token: adminToken() });
+  if (error) { document.getElementById('arrivals-list').innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  adminMembers = data || [];
+
+  const arrivals = adminMembers.filter(m => m.travel && m.travel.arrival_date)
+    .sort((a, b) => (a.travel.arrival_date + (a.travel.arrival_time || '')).localeCompare(b.travel.arrival_date + (b.travel.arrival_time || '')));
+  const departures = adminMembers.filter(m => m.travel && m.travel.departure_date)
+    .sort((a, b) => (a.travel.departure_date + (a.travel.departure_time || '')).localeCompare(b.travel.departure_date + (b.travel.departure_time || '')));
+
+  document.getElementById('arrivals-list').innerHTML = arrivals.length
+    ? arrivals.map(m => renderTravelRow(m, 'arrival')).join('')
+    : `<div class="empty-state"><p>No arrival details submitted yet.</p></div>`;
+  document.getElementById('departures-list').innerHTML = departures.length
+    ? departures.map(m => renderTravelRow(m, 'departure')).join('')
+    : `<div class="empty-state"><p>No departure details submitted yet.</p></div>`;
+}
+
+function renderTravelRow(m, kind) {
+  const t = m.travel;
+  const date = kind === 'arrival' ? t.arrival_date : t.departure_date;
+  const time = kind === 'arrival' ? t.arrival_time : t.departure_time;
+  const mode = kind === 'arrival' ? t.arrival_mode : t.departure_mode;
+  const number = kind === 'arrival' ? t.arrival_number : t.departure_number;
+  return `
+    <div class="itinerary-item">
+      <div class="ev-name">${formatDate(date)}${time ? ' · ' + formatTime(time) : ''} - ${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></div>
+      <div class="ev-meta">${escapeHtml(m.family_name)}${mode ? ' · ' + escapeHtml(mode) : ''}${number ? ' · ' + escapeHtml(number) : ''}</div>
+    </div>
+  `;
 }
 
 // ---------- Itinerary ----------
