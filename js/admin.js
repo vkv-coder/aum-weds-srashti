@@ -219,27 +219,81 @@ function renderRoomGroup(title, members) {
   `;
 }
 
-// ---------- Travel (arrival/departure, chronological) ----------
+// ---------- Travel (arrival/departure, chronological, date-filterable, exportable) ----------
+let _currentArrivals = [];
+let _currentDepartures = [];
+
 async function renderTravelTab(container) {
   container.innerHTML = `
-    <div class="card"><div class="card-title">Arrivals</div><div id="arrivals-list">Loading...</div></div>
-    <div class="card"><div class="card-title">Departures</div><div id="departures-list">Loading...</div></div>
+    <div class="card">
+      <div class="card-title">Filter by Date</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;"><label>From</label><input type="date" id="travel-from" oninput="renderTravelLists()"></div>
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;"><label>To</label><input type="date" id="travel-to" oninput="renderTravelLists()"></div>
+        <button class="btn-secondary btn-sm" onclick="clearTravelFilter()">Clear</button>
+      </div>
+      <div class="form-hint" style="margin-top:8px;">Tip: set From/To to the same date to see just one day - e.g. the day before the wedding.</div>
+    </div>
+    <div class="card">
+      <div class="section-header"><h3>Arrivals</h3><button class="btn-primary btn-sm" onclick="exportTravelCSV('arrival')">⬇️ Export to Excel</button></div>
+      <div id="arrivals-list">Loading...</div>
+    </div>
+    <div class="card">
+      <div class="section-header"><h3>Departures</h3><button class="btn-primary btn-sm" onclick="exportTravelCSV('departure')">⬇️ Export to Excel</button></div>
+      <div id="departures-list">Loading...</div>
+    </div>
   `;
   const { data, error } = await db.rpc('wd_admin_list_members', { p_token: adminToken() });
   if (error) { document.getElementById('arrivals-list').innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   adminMembers = data || [];
+  renderTravelLists();
+}
 
-  const arrivals = adminMembers.filter(m => m.travel && m.travel.arrival_date)
+function clearTravelFilter() {
+  document.getElementById('travel-from').value = '';
+  document.getElementById('travel-to').value = '';
+  renderTravelLists();
+}
+
+function travelFilterRange() {
+  return {
+    from: document.getElementById('travel-from').value || null,
+    to: document.getElementById('travel-to').value || null
+  };
+}
+
+function travelHasFilter() {
+  const { from, to } = travelFilterRange();
+  return !!(from || to);
+}
+
+function filterByDate(members, dateField) {
+  const { from, to } = travelFilterRange();
+  return members.filter(m => {
+    const d = m.travel[dateField];
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+function renderTravelLists() {
+  const withArrival = adminMembers.filter(m => m.travel && m.travel.arrival_date);
+  const withDeparture = adminMembers.filter(m => m.travel && m.travel.departure_date);
+
+  _currentArrivals = filterByDate(withArrival, 'arrival_date')
     .sort((a, b) => (a.travel.arrival_date + (a.travel.arrival_time || '')).localeCompare(b.travel.arrival_date + (b.travel.arrival_time || '')));
-  const departures = adminMembers.filter(m => m.travel && m.travel.departure_date)
+  _currentDepartures = filterByDate(withDeparture, 'departure_date')
     .sort((a, b) => (a.travel.departure_date + (a.travel.departure_time || '')).localeCompare(b.travel.departure_date + (b.travel.departure_time || '')));
 
-  document.getElementById('arrivals-list').innerHTML = arrivals.length
-    ? arrivals.map(m => renderTravelRow(m, 'arrival')).join('')
-    : `<div class="empty-state"><p>No arrival details submitted yet.</p></div>`;
-  document.getElementById('departures-list').innerHTML = departures.length
-    ? departures.map(m => renderTravelRow(m, 'departure')).join('')
-    : `<div class="empty-state"><p>No departure details submitted yet.</p></div>`;
+  const filtered = travelHasFilter();
+  document.getElementById('arrivals-list').innerHTML = _currentArrivals.length
+    ? _currentArrivals.map(m => renderTravelRow(m, 'arrival')).join('')
+    : `<div class="empty-state"><p>No arrivals ${filtered ? 'in this date range' : 'submitted yet'}.</p></div>`;
+  document.getElementById('departures-list').innerHTML = _currentDepartures.length
+    ? _currentDepartures.map(m => renderTravelRow(m, 'departure')).join('')
+    : `<div class="empty-state"><p>No departures ${filtered ? 'in this date range' : 'submitted yet'}.</p></div>`;
 }
 
 function renderTravelRow(m, kind) {
@@ -254,6 +308,38 @@ function renderTravelRow(m, kind) {
       <div class="ev-meta">${escapeHtml(m.family_name)}${mode ? ' · ' + escapeHtml(mode) : ''}${number ? ' · ' + escapeHtml(number) : ''}</div>
     </div>
   `;
+}
+
+function csvEscape(val) {
+  const s = String(val == null ? '' : val);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportTravelCSV(kind) {
+  const rows = kind === 'arrival' ? _currentArrivals : _currentDepartures;
+  if (!rows || rows.length === 0) { showToast('Nothing to export.', 'error'); return; }
+  const headers = ['Date', 'Time', 'Name', 'Member Code', 'Family', 'Mode', kind === 'arrival' ? 'Train/Flight No' : 'Train/Flight No'];
+  const lines = [headers.map(csvEscape).join(',')];
+  for (const m of rows) {
+    const t = m.travel;
+    const date = kind === 'arrival' ? t.arrival_date : t.departure_date;
+    const time = kind === 'arrival' ? t.arrival_time : t.departure_time;
+    const mode = kind === 'arrival' ? t.arrival_mode : t.departure_mode;
+    const number = kind === 'arrival' ? t.arrival_number : t.departure_number;
+    lines.push([formatDate(date), time ? formatTime(time) : '', m.name, m.member_code, m.family_name, mode || '', number || ''].map(csvEscape).join(','));
+  }
+  const csvContent = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const { from, to } = travelFilterRange();
+  const suffix = (from || to) ? `-${from || 'start'}_to_${to || 'end'}` : '';
+  a.download = `aum-srashti-${kind}s${suffix}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ---------- Itinerary ----------
