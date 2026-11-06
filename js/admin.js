@@ -359,10 +359,17 @@ async function renderTravelTab(container) {
 let _travelDateOptions = [];
 let _travelSelectedDate = null; // null = All
 
+// Pure UTC arithmetic - never round-trip through local-timezone Date
+// parsing here. Mixing local-midnight parsing with toISOString() (always
+// UTC) is a fixed point for positive UTC offsets (e.g. IST, UTC+5:30):
+// advancing one local day and reading back the UTC date string yields the
+// SAME string every time, so the chip-range loop below never terminated
+// for anyone in India - froze the Travel tab on every load.
 function addDaysIso(isoDate, n) {
-  const d = new Date(isoDate + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
 }
 
 function travelChipLabel(iso) {
@@ -377,9 +384,11 @@ async function loadTravelDateChips() {
     const start = addDaysIso(dates[0], -1);
     const end = addDaysIso(dates[dates.length - 1], 1);
     let cur = start;
-    while (cur <= end) {
+    let guard = 0;
+    while (cur <= end && guard < 90) {
       _travelDateOptions.push(cur);
       cur = addDaysIso(cur, 1);
+      guard++;
     }
   }
   _travelSelectedDate = null;
