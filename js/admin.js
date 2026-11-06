@@ -115,6 +115,7 @@ async function renderFamiliesTab(container) {
   container.innerHTML = `
     <div class="card">
       <div class="section-header"><h3>Families</h3><button class="btn-primary btn-sm" onclick="openAddFamilyModal()">+ Add Family</button></div>
+      <div class="form-group"><input type="text" id="family-search" placeholder="Search by family name, code (e.g. v001), or room no..." oninput="renderFamiliesList()"></div>
       <div id="families-list">Loading...</div>
     </div>
   `;
@@ -126,8 +127,23 @@ async function loadFamilies() {
   const listEl = document.getElementById('families-list');
   if (error) { listEl.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   adminFamilies = data || [];
-  if (adminFamilies.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>No families added yet.</p></div>`; return; }
-  listEl.innerHTML = adminFamilies.map(f => `
+  renderFamiliesList();
+}
+
+function renderFamiliesList() {
+  const listEl = document.getElementById('families-list');
+  if (!listEl) return;
+  const query = (document.getElementById('family-search').value || '').trim().toLowerCase();
+  let families = adminFamilies;
+  if (query) {
+    families = families.filter(f =>
+      f.family_name.toLowerCase().includes(query) ||
+      f.code.toLowerCase().includes(query) ||
+      (f.members || []).some(m => m.name.toLowerCase().includes(query) || (m.room_no && m.room_no.toLowerCase().includes(query)))
+    );
+  }
+  if (families.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>${adminFamilies.length === 0 ? 'No families added yet.' : 'No matching families.'}</p></div>`; return; }
+  listEl.innerHTML = families.map(f => `
     <div class="member-row">
       <div class="section-header">
         <div class="member-name">${escapeHtml(f.family_name)} <span class="form-hint">(code: ${escapeHtml(f.code)})</span></div>
