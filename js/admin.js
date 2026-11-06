@@ -138,6 +138,10 @@ async function loadFamilies() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" placeholder="Stay place name" value="${escapeHtml(f.stay_place_name || '')}" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-name-${f.code}">
           <input type="url" placeholder="Google Maps link" value="${escapeHtml(f.stay_map_link || '')}" style="flex:1;min-width:160px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-link-${f.code}">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+          <input type="text" placeholder="Coordinator name" value="${escapeHtml(f.stay_coordinator_name || '')}" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-coord-name-${f.code}">
+          <input type="tel" placeholder="Coordinator phone" value="${escapeHtml(f.stay_coordinator_phone || '')}" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-coord-phone-${f.code}">
           <button class="btn-secondary btn-sm" onclick="saveFamilyStay('${f.code}')">Save Stay</button>
         </div>
       </div>
@@ -214,7 +218,12 @@ async function deleteMember(memberId, code) {
 async function saveFamilyStay(code) {
   const name = document.getElementById(`stay-name-${code}`).value.trim() || null;
   const link = document.getElementById(`stay-link-${code}`).value.trim() || null;
-  const { error } = await db.rpc('wd_admin_set_family_stay', { p_token: adminToken(), p_code: code, p_stay_place_name: name, p_stay_map_link: link });
+  const coordName = document.getElementById(`stay-coord-name-${code}`).value.trim() || null;
+  const coordPhone = document.getElementById(`stay-coord-phone-${code}`).value.trim() || null;
+  const { error } = await db.rpc('wd_admin_set_family_stay', {
+    p_token: adminToken(), p_code: code, p_stay_place_name: name, p_stay_map_link: link,
+    p_stay_coordinator_name: coordName, p_stay_coordinator_phone: coordPhone
+  });
   if (error) { showToast(error.message, 'error'); return; }
   showToast('✅ Stay saved');
 }

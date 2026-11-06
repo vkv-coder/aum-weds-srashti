@@ -52,6 +52,7 @@ async function tryAutoLogin() {
 
 const GUEST_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'stay', label: 'My Stay', icon: '🏨' },
   { id: 'home', label: 'Itinerary', icon: '📅' },
   { id: 'announcements', label: 'News', icon: '🔔' },
   { id: 'family', label: 'My Family', icon: '👪' },
@@ -87,6 +88,7 @@ function goTab(tabId) {
   renderNavTabs();
   const content = document.getElementById('page-content');
   if (tabId === 'dashboard') renderDashboardPage(content);
+  else if (tabId === 'stay') renderStayPage(content);
   else if (tabId === 'home') renderHomePage(content);
   else if (tabId === 'announcements') renderAnnouncementsPage(content);
   else if (tabId === 'family') renderFamilyPage(content);
@@ -96,11 +98,9 @@ function goTab(tabId) {
 // ---------- Itinerary ----------
 async function renderHomePage(container) {
   container.innerHTML = `
-    <div class="card" id="stay-card"></div>
     <div class="card" id="contact-card"></div>
     <div class="card"><div class="card-title">Function Itinerary</div><div id="itinerary-list">Loading...</div></div>
   `;
-  renderStayCard();
   renderContactCard();
   const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date');
   const listEl = document.getElementById('itinerary-list');
@@ -127,17 +127,38 @@ async function renderHomePage(container) {
   `).join('');
 }
 
-function renderStayCard() {
-  const el = document.getElementById('stay-card');
-  if (!el) return;
+// ---------- My Stay (accommodation: place, map, rooms, coordinator) ----------
+function renderStayPage(container) {
   const name = currentFamily.stay_place_name;
   const link = currentFamily.stay_map_link;
-  if (!name && !link) { el.style.display = 'none'; return; }
-  el.innerHTML = `
-    <div class="card-title">🏨 Your Stay</div>
-    ${name ? `<div class="ev-meta">${escapeHtml(name)}</div>` : ''}
-    ${link ? `<div class="ev-links"><a class="ev-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noopener">🗺️ View on Map</a></div>` : ''}
+  const coordName = currentFamily.stay_coordinator_name;
+  const coordPhone = currentFamily.stay_coordinator_phone;
+  const members = currentFamily.members || [];
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-title">🏨 Your Stay</div>
+      ${name || link ? `
+        ${name ? `<div class="ev-meta">${escapeHtml(name)}</div>` : ''}
+        ${coordName || coordPhone ? `<div class="ev-meta">📞 ${escapeHtml(coordName || 'Coordinator')}${coordPhone ? ' - ' + escapeHtml(coordPhone) : ''}</div>` : ''}
+        <div class="ev-links">
+          ${link ? `<a class="ev-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noopener">🗺️ View on Map</a>` : ''}
+          ${coordPhone ? `<a class="ev-link-btn" href="tel:${escapeHtml(coordPhone)}">📞 Call Coordinator</a>` : ''}
+        </div>
+      ` : `<div class="empty-state"><p>Stay details not added yet. Check back soon.</p></div>`}
+    </div>
+    <div class="card">
+      <div class="card-title">Room Assignments</div>
+      <div id="stay-rooms-list"></div>
+    </div>
   `;
+
+  document.getElementById('stay-rooms-list').innerHTML = members.map(m => `
+    <div class="member-row">
+      <div class="member-name">${escapeHtml(m.name)} <span class="form-hint">(${escapeHtml(m.member_code)})</span></div>
+      ${m.room_no ? `<div class="room-badge">🛏️ Room ${escapeHtml(m.room_no)}</div>` : `<div class="form-hint">Room not assigned yet</div>`}
+    </div>
+  `).join('');
 }
 
 async function renderContactCard() {
