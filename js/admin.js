@@ -1,5 +1,5 @@
 // ==========================================
-// Aum weds Srashti - admin panel
+// Om weds Srashti - admin panel
 // ==========================================
 
 const ADMIN_TOKEN_KEY = 'wd_admin_token';
@@ -427,7 +427,7 @@ function exportTravelCSV(kind) {
   a.href = url;
   const { from, to } = travelFilterRange();
   const suffix = (from || to) ? `-${from || 'start'}_to_${to || 'end'}` : '';
-  a.download = `aum-srashti-${kind}s${suffix}.csv`;
+  a.download = `om-srashti-${kind}s${suffix}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

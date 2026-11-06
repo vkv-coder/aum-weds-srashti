@@ -1,5 +1,5 @@
 -- ==========================================
--- Aum weds Srashti - wedding guest PWA
+-- Om weds Srashti - wedding guest PWA
 -- All tables prefixed wd_ (shared "rotry_event" Supabase project).
 -- Guests authenticate with a family code only (no Supabase Auth, no
 -- approval). Admin authenticates with a PIN -> short-lived session token.

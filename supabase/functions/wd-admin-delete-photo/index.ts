@@ -1,4 +1,4 @@
-// Aum weds Srashti - admin-only gallery photo deletion.
+// Om weds Srashti - admin-only gallery photo deletion.
 // Guests can only INSERT into the wd-gallery storage bucket (open upload,
 // by design - any guest can add photos, everyone sees them). Deletion is
 // deliberately NOT exposed via a storage RLS policy (that would let any

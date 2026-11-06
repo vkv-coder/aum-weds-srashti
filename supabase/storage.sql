@@ -1,4 +1,4 @@
--- Aum weds Srashti - gallery storage bucket.
+-- Om weds Srashti - gallery storage bucket.
 -- Open read+insert scoped strictly to this one bucket (wd-gallery) - the
 -- gallery is deliberately "any guest can snap a photo and everyone sees
 -- it instantly", so there's no per-guest write restriction here, same as

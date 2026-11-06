@@ -1,5 +1,5 @@
 // ==========================================
-// Aum weds Srashti - guest app
+// Om weds Srashti - guest app
 // ==========================================
 
 let currentFamily = null;

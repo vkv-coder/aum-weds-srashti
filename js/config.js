@@ -1,5 +1,5 @@
 // ==========================================
-// Aum weds Srashti - Supabase configuration
+// Om weds Srashti - Supabase configuration
 // ==========================================
 
 const SUPABASE_URL = 'https://wrzpgultvahxbrgooibn.supabase.co';

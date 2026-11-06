@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aum-srashti-v1';
+const CACHE_NAME = 'om-srashti-v2';
 const SHELL_FILES = [
   '/index.html',
   '/admin.html',
@@ -47,13 +47,13 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: '💐 Aum weds Srashti', body: 'New announcement.' };
+  let data = { title: '💐 Om weds Srashti', body: 'New announcement.' };
   try { if (event.data) data = event.data.json(); } catch (e) {}
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       vibrate: [200, 100, 200],
-      tag: 'aum-srashti-announcement',
+      tag: 'om-srashti-announcement',
       renotify: true
     })
   );
