@@ -119,7 +119,7 @@ async function renderHomePage(container) {
   `;
   renderContactCard();
 
-  const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date').order('start_time');
+  const { data, error } = await db.from('wd_itinerary').select('*').order('event_date').order('start_time');
   const listEl = document.getElementById('itinerary-list');
   if (error || !data || data.length === 0) {
     listEl.innerHTML = `<div class="empty-state"><p>No functions added yet. Check back soon.</p></div>`;
@@ -142,7 +142,7 @@ async function renderHomePage(container) {
     `).join('');
   }
 
-  const { data: meals, error: mealsError } = await db.from('wd_meals').select('*').order('sort_order').order('meal_date').order('meal_time');
+  const { data: meals, error: mealsError } = await db.from('wd_meals').select('*').order('meal_date').order('meal_time');
   const mealsEl = document.getElementById('meals-list');
   if (mealsError || !meals || meals.length === 0) {
     mealsEl.innerHTML = `<div class="empty-state"><p>No meals added yet.</p></div>`;
@@ -306,7 +306,9 @@ async function enableAnnouncementPush() {
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+      .then((reg) => reg.update().catch(() => {}))
+      .catch(() => {});
   }
 }
 

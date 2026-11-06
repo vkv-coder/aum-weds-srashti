@@ -603,7 +603,7 @@ async function renderItineraryTab(container) {
 let adminMealsCache = [];
 
 async function loadMealsAdmin() {
-  const { data, error } = await db.from('wd_meals').select('*').order('sort_order').order('meal_date').order('meal_time');
+  const { data, error } = await db.from('wd_meals').select('*').order('meal_date').order('meal_time');
   const listEl = document.getElementById('meals-admin-list');
   adminMealsCache = data || [];
   if (error || !data || data.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>No meals added yet.</p></div>`; return; }
@@ -671,7 +671,7 @@ async function deleteMeal(id) {
 let adminItineraryCache = [];
 
 async function loadItineraryAdmin() {
-  const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date').order('start_time');
+  const { data, error } = await db.from('wd_itinerary').select('*').order('event_date').order('start_time');
   const listEl = document.getElementById('itinerary-admin-list');
   adminItineraryCache = data || [];
   if (error || !data || data.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>No events yet.</p></div>`; return; }
