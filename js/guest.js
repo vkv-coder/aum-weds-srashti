@@ -272,6 +272,14 @@ function renderFamilyPage(container) {
     <div class="card">
       <div class="card-title">${escapeHtml(currentFamily.family_name)} - Rooms &amp; Travel</div>
       <div id="members-list"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <label class="form-hint" style="display:block;margin-bottom:4px;">Add a family member travelling with you</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="new-member-name" placeholder="Full name" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+          <button class="btn-primary btn-sm" onclick="addGuestMember()">+ Add Member</button>
+        </div>
+        <div class="error-msg" id="new-member-error"></div>
+      </div>
     </div>
   `;
   document.getElementById('members-list').innerHTML = members.map(m => `
@@ -291,6 +299,20 @@ function renderFamilyPage(container) {
       </div>
     </div>
   `).join('');
+}
+
+async function addGuestMember() {
+  const input = document.getElementById('new-member-name');
+  const errEl = document.getElementById('new-member-error');
+  const name = (input.value || '').trim();
+  if (errEl) errEl.textContent = '';
+  if (!name) { if (errEl) errEl.textContent = 'Please enter a name.'; return; }
+  const { data, error } = await db.rpc('wd_guest_add_member', { p_code: currentFamily.code, p_name: name });
+  if (error) { if (errEl) errEl.textContent = error.message; return; }
+  currentFamily.members = currentFamily.members || [];
+  currentFamily.members.push(data);
+  showToast('✅ Member added');
+  renderFamilyPage(document.getElementById('page-content'));
 }
 
 function renderTravelSummary(t) {
