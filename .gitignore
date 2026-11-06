@@ -1,3 +1,5 @@
 .DS_Store
 *.log
 supabase/.temp/
+.temp/
+supabase/.temp/
