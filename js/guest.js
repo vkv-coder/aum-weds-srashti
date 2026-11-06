@@ -39,6 +39,19 @@ function enterApp() {
   document.getElementById('family-name-badge').textContent = currentFamily.family_name;
   registerServiceWorker();
   goTab('dashboard');
+  promptPushOnce();
+}
+
+// Browsers require an explicit user tap on the permission dialog - this
+// cannot be skipped or auto-granted. This just asks once automatically on
+// first login instead of making the guest find the button themselves.
+function promptPushOnce() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  if (localStorage.getItem('wd_push_prompted')) return;
+  localStorage.setItem('wd_push_prompted', '1');
+  if (Notification.permission === 'default') {
+    setTimeout(enableAnnouncementPush, 800);
+  }
 }
 
 async function tryAutoLogin() {
@@ -54,7 +67,7 @@ const GUEST_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
   { id: 'stay', label: 'My Stay', icon: '🏨' },
   { id: 'home', label: 'Itinerary', icon: '📅' },
-  { id: 'announcements', label: 'News', icon: '🔔' },
+  { id: 'announcements', label: 'Special Announcement', icon: '🔔' },
   { id: 'family', label: 'My Family', icon: '👪' },
   { id: 'gallery', label: 'Gallery', icon: '📸' }
 ];
@@ -177,7 +190,7 @@ async function renderContactCard() {
 async function renderAnnouncementsPage(container) {
   container.innerHTML = `
     <div class="card" id="push-card"></div>
-    <div class="card"><div class="card-title">Announcements</div><div id="announcements-list">Loading...</div></div>
+    <div class="card"><div class="card-title">Special Announcement</div><div id="announcements-list">Loading...</div></div>
   `;
   renderPushCard();
   const { data, error } = await db.from('wd_announcements').select('*').order('created_at', { ascending: false });
