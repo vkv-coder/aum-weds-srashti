@@ -323,6 +323,17 @@ let _currentDepartures = [];
 async function renderTravelTab(container) {
   container.innerHTML = `
     <div class="card">
+      <div class="card-title">How to Reach (shown to guests)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:140px;"><label>Nearest Airport</label><input type="text" id="note-airport" placeholder="e.g. Indore"></div>
+        <div class="form-group" style="flex:1;min-width:200px;"><label>Road Journey Note</label><input type="text" id="note-road-time" placeholder="e.g. 5 hrs 30 min road journey from Indore to Mandsaur"></div>
+      </div>
+      <button class="btn-primary btn-sm" onclick="saveTravelNote()">Save Note</button>
+      <div class="error-msg" id="note-error"></div>
+      <div class="section-header" style="margin-top:14px;"><h3>Train Routes</h3><button class="btn-secondary btn-sm" onclick="openTravelRouteModal(null)">+ Add Route</button></div>
+      <div id="travel-routes-list">Loading...</div>
+    </div>
+    <div class="card">
       <div class="card-title">Filter by Date</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;"><label>From</label><input type="date" id="travel-from" oninput="renderTravelLists()"></div>
@@ -344,6 +355,89 @@ async function renderTravelTab(container) {
   if (error) { document.getElementById('arrivals-list').innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   adminMembers = data || [];
   renderTravelLists();
+  loadTravelNote();
+  loadTravelRoutes();
+}
+
+async function loadTravelNote() {
+  const { data } = await db.from('wd_travel_note').select('*').eq('id', 1).maybeSingle();
+  if (!data) return;
+  document.getElementById('note-airport').value = data.airport_name || '';
+  document.getElementById('note-road-time').value = data.road_time || '';
+}
+
+async function saveTravelNote() {
+  const errEl = document.getElementById('note-error');
+  errEl.textContent = '';
+  const { error } = await db.rpc('wd_admin_set_travel_note', {
+    p_token: adminToken(),
+    p_airport_name: document.getElementById('note-airport').value.trim() || null,
+    p_road_time: document.getElementById('note-road-time').value.trim() || null
+  });
+  if (error) { errEl.textContent = error.message; return; }
+  showToast('✅ Saved');
+}
+
+let adminTravelRoutes = [];
+
+async function loadTravelRoutes() {
+  const { data, error } = await db.from('wd_travel_routes').select('*').order('sort_order');
+  const listEl = document.getElementById('travel-routes-list');
+  adminTravelRoutes = data || [];
+  if (error || !data || data.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>No routes added yet.</p></div>`; return; }
+  listEl.innerHTML = data.map(r => `
+    <div class="itinerary-item">
+      <div class="section-header">
+        <div class="ev-name">🚉 ${escapeHtml(r.from_place)}</div>
+        <div>
+          <button class="btn-secondary btn-sm" onclick="openTravelRouteModalById('${r.id}')">Edit</button>
+          <button class="btn-danger btn-sm" onclick="deleteTravelRoute('${r.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="ev-meta">${escapeHtml(r.train_no || '')}</div>
+    </div>
+  `).join('');
+}
+
+function openTravelRouteModalById(id) {
+  openTravelRouteModal(adminTravelRoutes.find(r => r.id === id));
+}
+
+function openTravelRouteModal(r) {
+  r = r || {};
+  openModal(`
+    <div class="modal-title">${r.id ? 'Edit' : 'Add'} Train Route</div>
+    <div class="form-group"><label>From (station/city)</label><input type="text" id="route-from" value="${escapeHtml(r.from_place || '')}"></div>
+    <div class="form-group"><label>Train Number(s)</label><input type="text" id="route-train-no" placeholder="e.g. 19316 or 22901 / 20667" value="${escapeHtml(r.train_no || '')}"></div>
+    <div class="error-msg" id="route-error"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveTravelRoute('${r.id || ''}')">Save</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function saveTravelRoute(id) {
+  const errEl = document.getElementById('route-error');
+  const fromPlace = document.getElementById('route-from').value.trim();
+  if (!fromPlace) { errEl.textContent = 'From is required.'; return; }
+  const { error } = await db.rpc('wd_admin_upsert_travel_route', {
+    p_token: adminToken(), p_id: id || null,
+    p_from_place: fromPlace,
+    p_train_no: document.getElementById('route-train-no').value.trim() || null,
+    p_sort_order: 0
+  });
+  if (error) { errEl.textContent = error.message; return; }
+  closeModal();
+  showToast('✅ Saved');
+  loadTravelRoutes();
+}
+
+async function deleteTravelRoute(id) {
+  if (!confirm('Delete this train route?')) return;
+  const { error } = await db.rpc('wd_admin_delete_travel_route', { p_token: adminToken(), p_id: id });
+  if (error) { showToast(error.message, 'error'); return; }
+  loadTravelRoutes();
 }
 
 function clearTravelFilter() {

@@ -141,7 +141,7 @@ async function renderHomePage(container) {
 }
 
 // ---------- My Stay (accommodation: place, map, rooms, coordinator) ----------
-function renderStayPage(container) {
+async function renderStayPage(container) {
   const name = currentFamily.stay_place_name;
   const link = currentFamily.stay_map_link;
   const coordName = currentFamily.stay_coordinator_name;
@@ -149,6 +149,7 @@ function renderStayPage(container) {
   const members = currentFamily.members || [];
 
   container.innerHTML = `
+    <div class="card" id="how-to-reach-card"></div>
     <div class="card">
       <div class="card-title">🏨 Your Stay</div>
       ${name || link ? `
@@ -172,6 +173,29 @@ function renderStayPage(container) {
       ${m.room_no ? `<div class="room-badge">🛏️ Room ${escapeHtml(m.room_no)}</div>` : `<div class="form-hint">Room not assigned yet</div>`}
     </div>
   `).join('');
+
+  renderHowToReachCard();
+}
+
+async function renderHowToReachCard() {
+  const el = document.getElementById('how-to-reach-card');
+  if (!el) return;
+  const [{ data: note }, { data: routes }] = await Promise.all([
+    db.from('wd_travel_note').select('*').eq('id', 1).maybeSingle(),
+    db.from('wd_travel_routes').select('*').order('sort_order')
+  ]);
+  if ((!note || (!note.airport_name && !note.road_time)) && (!routes || routes.length === 0)) {
+    el.style.display = 'none';
+    return;
+  }
+  el.innerHTML = `
+    <div class="card-title">🚆 How to Reach</div>
+    ${note && note.airport_name ? `<div class="ev-meta">✈️ Nearest Airport: ${escapeHtml(note.airport_name)}${note.road_time ? ' · ' + escapeHtml(note.road_time) : ''}</div>` : ''}
+    ${routes && routes.length > 0 ? `
+      <div class="form-hint" style="margin-top:8px;margin-bottom:4px;">Train numbers by station:</div>
+      ${routes.map(r => `<div class="ev-meta">🚉 ${escapeHtml(r.from_place)}: ${escapeHtml(r.train_no || '-')}</div>`).join('')}
+    ` : ''}
+  `;
 }
 
 async function renderContactCard() {
