@@ -96,9 +96,11 @@ function goTab(tabId) {
 // ---------- Itinerary ----------
 async function renderHomePage(container) {
   container.innerHTML = `
+    <div class="card" id="stay-card"></div>
     <div class="card" id="contact-card"></div>
     <div class="card"><div class="card-title">Function Itinerary</div><div id="itinerary-list">Loading...</div></div>
   `;
+  renderStayCard();
   renderContactCard();
   const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date');
   const listEl = document.getElementById('itinerary-list');
@@ -123,6 +125,19 @@ async function renderHomePage(container) {
       </div>` : ''}
     </div>
   `).join('');
+}
+
+function renderStayCard() {
+  const el = document.getElementById('stay-card');
+  if (!el) return;
+  const name = currentFamily.stay_place_name;
+  const link = currentFamily.stay_map_link;
+  if (!name && !link) { el.style.display = 'none'; return; }
+  el.innerHTML = `
+    <div class="card-title">🏨 Your Stay</div>
+    ${name ? `<div class="ev-meta">${escapeHtml(name)}</div>` : ''}
+    ${link ? `<div class="ev-links"><a class="ev-link-btn" href="${escapeHtml(link)}" target="_blank" rel="noopener">🗺️ View on Map</a></div>` : ''}
+  `;
 }
 
 async function renderContactCard() {

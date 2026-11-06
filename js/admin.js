@@ -133,6 +133,14 @@ async function loadFamilies() {
         <div class="member-name">${escapeHtml(f.family_name)} <span class="form-hint">(code: ${escapeHtml(f.code)})</span></div>
         <button class="btn-danger btn-sm" onclick="deleteFamily('${f.code}')">Delete</button>
       </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div class="form-hint" style="margin-bottom:4px;">🏨 Stay (hotel/accommodation)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" placeholder="Stay place name" value="${escapeHtml(f.stay_place_name || '')}" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-name-${f.code}">
+          <input type="url" placeholder="Google Maps link" value="${escapeHtml(f.stay_map_link || '')}" style="flex:1;min-width:160px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;" id="stay-link-${f.code}">
+          <button class="btn-secondary btn-sm" onclick="saveFamilyStay('${f.code}')">Save Stay</button>
+        </div>
+      </div>
       ${(f.members || []).map(m => `
         <div style="margin-top:8px;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -201,6 +209,14 @@ async function deleteMember(memberId, code) {
   const { error } = await db.rpc('wd_admin_delete_member', { p_token: adminToken(), p_member_id: memberId });
   if (error) { showToast(error.message, 'error'); return; }
   loadFamilies();
+}
+
+async function saveFamilyStay(code) {
+  const name = document.getElementById(`stay-name-${code}`).value.trim() || null;
+  const link = document.getElementById(`stay-link-${code}`).value.trim() || null;
+  const { error } = await db.rpc('wd_admin_set_family_stay', { p_token: adminToken(), p_code: code, p_stay_place_name: name, p_stay_map_link: link });
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('✅ Stay saved');
 }
 
 async function saveRoom(memberId) {

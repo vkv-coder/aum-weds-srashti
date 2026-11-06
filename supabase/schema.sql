@@ -12,7 +12,9 @@
 create table if not exists wd_families (
   code text primary key,
   family_name text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  stay_place_name text,
+  stay_map_link text
 );
 
 create table if not exists wd_members (
@@ -237,6 +239,8 @@ begin
   select jsonb_build_object(
     'code', v_family.code,
     'family_name', v_family.family_name,
+    'stay_place_name', v_family.stay_place_name,
+    'stay_map_link', v_family.stay_map_link,
     'members', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', m.id,
@@ -416,6 +420,7 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'code', f.code, 'family_name', f.family_name,
+      'stay_place_name', f.stay_place_name, 'stay_map_link', f.stay_map_link,
       'members', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', m.id, 'name', m.name, 'room_no', m.room_no, 'sort_order', m.sort_order,
@@ -562,6 +567,20 @@ end;
 $$;
 revoke all on function wd_admin_set_room(uuid, uuid, text) from public;
 grant execute on function wd_admin_set_room(uuid, uuid, text) to anon, authenticated;
+
+create or replace function wd_admin_set_family_stay(p_token uuid, p_code text, p_stay_place_name text, p_stay_map_link text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform wd_assert_admin(p_token);
+  update wd_families set stay_place_name = p_stay_place_name, stay_map_link = p_stay_map_link where code = lower(trim(p_code));
+end;
+$$;
+revoke all on function wd_admin_set_family_stay(uuid, text, text, text) from public;
+grant execute on function wd_admin_set_family_stay(uuid, text, text, text) to anon, authenticated;
 
 -- Pickup/drop-off assignment (vehicle no. + driver contact). Upserts an
 -- empty wd_travel_details row first so admin can assign a pickup even
