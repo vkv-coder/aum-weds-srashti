@@ -205,13 +205,26 @@ async function renderHowToReachCard() {
     db.from('wd_travel_note').select('*').eq('id', 1).maybeSingle(),
     db.from('wd_travel_routes').select('*').order('sort_order')
   ]);
-  if ((!note || (!note.airport_name && !note.road_time)) && (!routes || routes.length === 0)) {
+  const hasNote = note && (note.airport_name || note.road_time || note.railway_station_name ||
+    note.airport_to_venue_link || note.airport_to_stay_link || note.railway_to_venue_link || note.railway_to_stay_link);
+  if (!hasNote && (!routes || routes.length === 0)) {
     el.style.display = 'none';
     return;
   }
   el.innerHTML = `
     <div class="card-title">🚆 How to Reach</div>
     ${note && note.airport_name ? `<div class="ev-meta">✈️ Nearest Airport: ${escapeHtml(note.airport_name)}${note.road_time ? ' · ' + escapeHtml(note.road_time) : ''}</div>` : ''}
+    ${note && (note.airport_to_venue_link || note.airport_to_stay_link) ? `
+      <div class="ev-links">
+        ${note.airport_to_venue_link ? `<a class="ev-link-btn" href="${escapeHtml(note.airport_to_venue_link)}" target="_blank" rel="noopener">🗺️ Airport → Venue</a>` : ''}
+        ${note.airport_to_stay_link ? `<a class="ev-link-btn" href="${escapeHtml(note.airport_to_stay_link)}" target="_blank" rel="noopener">🗺️ Airport → Stay</a>` : ''}
+      </div>` : ''}
+    ${note && note.railway_station_name ? `<div class="ev-meta" style="margin-top:8px;">🚉 Nearest Railway Station: ${escapeHtml(note.railway_station_name)}</div>` : ''}
+    ${note && (note.railway_to_venue_link || note.railway_to_stay_link) ? `
+      <div class="ev-links">
+        ${note.railway_to_venue_link ? `<a class="ev-link-btn" href="${escapeHtml(note.railway_to_venue_link)}" target="_blank" rel="noopener">🗺️ Station → Venue</a>` : ''}
+        ${note.railway_to_stay_link ? `<a class="ev-link-btn" href="${escapeHtml(note.railway_to_stay_link)}" target="_blank" rel="noopener">🗺️ Station → Stay</a>` : ''}
+      </div>` : ''}
     ${routes && routes.length > 0 ? `
       <div class="form-hint" style="margin-top:8px;margin-bottom:4px;">Train numbers by station:</div>
       ${routes.map(r => `<div class="ev-meta">🚉 ${escapeHtml(r.from_place)}: ${escapeHtml(r.train_no || '-')}</div>`).join('')}

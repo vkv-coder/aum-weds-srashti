@@ -116,6 +116,11 @@ create table if not exists wd_travel_note (
   id int primary key default 1,
   airport_name text,
   road_time text,
+  railway_station_name text,
+  airport_to_venue_link text,
+  airport_to_stay_link text,
+  railway_to_venue_link text,
+  railway_to_stay_link text,
   constraint wd_travel_note_single_row check (id = 1)
 );
 
@@ -807,7 +812,14 @@ $$;
 revoke all on function wd_admin_delete_travel_route(uuid, uuid) from public;
 grant execute on function wd_admin_delete_travel_route(uuid, uuid) to anon, authenticated;
 
-create or replace function wd_admin_set_travel_note(p_token uuid, p_airport_name text, p_road_time text)
+create or replace function wd_admin_set_travel_note(
+  p_token uuid, p_airport_name text, p_road_time text,
+  p_railway_station_name text default null,
+  p_airport_to_venue_link text default null,
+  p_airport_to_stay_link text default null,
+  p_railway_to_venue_link text default null,
+  p_railway_to_stay_link text default null
+)
 returns void
 language plpgsql
 security definer
@@ -815,12 +827,25 @@ set search_path = public
 as $$
 begin
   perform wd_assert_admin(p_token);
-  insert into wd_travel_note (id, airport_name, road_time) values (1, p_airport_name, p_road_time)
-  on conflict (id) do update set airport_name = excluded.airport_name, road_time = excluded.road_time;
+  insert into wd_travel_note (
+    id, airport_name, road_time, railway_station_name,
+    airport_to_venue_link, airport_to_stay_link, railway_to_venue_link, railway_to_stay_link
+  ) values (
+    1, p_airport_name, p_road_time, p_railway_station_name,
+    p_airport_to_venue_link, p_airport_to_stay_link, p_railway_to_venue_link, p_railway_to_stay_link
+  )
+  on conflict (id) do update set
+    airport_name = excluded.airport_name,
+    road_time = excluded.road_time,
+    railway_station_name = excluded.railway_station_name,
+    airport_to_venue_link = excluded.airport_to_venue_link,
+    airport_to_stay_link = excluded.airport_to_stay_link,
+    railway_to_venue_link = excluded.railway_to_venue_link,
+    railway_to_stay_link = excluded.railway_to_stay_link;
 end;
 $$;
-revoke all on function wd_admin_set_travel_note(uuid, text, text) from public;
-grant execute on function wd_admin_set_travel_note(uuid, text, text) to anon, authenticated;
+revoke all on function wd_admin_set_travel_note(uuid, text, text, text, text, text, text, text) from public;
+grant execute on function wd_admin_set_travel_note(uuid, text, text, text, text, text, text, text) to anon, authenticated;
 
 create or replace function wd_admin_upsert_meal(
   p_token uuid, p_id uuid, p_meal_name text, p_meal_date date,

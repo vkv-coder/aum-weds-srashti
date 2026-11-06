@@ -328,6 +328,11 @@ async function renderTravelTab(container) {
         <div class="form-group" style="flex:1;min-width:140px;"><label>Nearest Airport</label><input type="text" id="note-airport" placeholder="e.g. Indore"></div>
         <div class="form-group" style="flex:1;min-width:200px;"><label>Road Journey Note</label><input type="text" id="note-road-time" placeholder="e.g. 5 hrs 30 min road journey from Indore to Mandsaur"></div>
       </div>
+      <div class="form-group"><label>Airport → Venue (Google Maps link)</label><input type="url" id="note-airport-venue" placeholder="https://maps.app.goo.gl/..."></div>
+      <div class="form-group"><label>Airport → Stay (only if different from venue)</label><input type="url" id="note-airport-stay" placeholder="https://maps.app.goo.gl/..."></div>
+      <div class="form-group"><label>Nearest Railway Station</label><input type="text" id="note-railway" placeholder="e.g. Mandsaur Railway Station"></div>
+      <div class="form-group"><label>Railway Station → Venue (Google Maps link)</label><input type="url" id="note-railway-venue" placeholder="https://maps.app.goo.gl/..."></div>
+      <div class="form-group"><label>Railway Station → Stay (only if different from venue)</label><input type="url" id="note-railway-stay" placeholder="https://maps.app.goo.gl/..."></div>
       <button class="btn-primary btn-sm" onclick="saveTravelNote()">Save Note</button>
       <div class="error-msg" id="note-error"></div>
       <div class="section-header" style="margin-top:14px;"><h3>Train Routes</h3><button class="btn-secondary btn-sm" onclick="openTravelRouteModal(null)">+ Add Route</button></div>
@@ -414,6 +419,11 @@ async function loadTravelNote() {
   if (!data) return;
   document.getElementById('note-airport').value = data.airport_name || '';
   document.getElementById('note-road-time').value = data.road_time || '';
+  document.getElementById('note-airport-venue').value = data.airport_to_venue_link || '';
+  document.getElementById('note-airport-stay').value = data.airport_to_stay_link || '';
+  document.getElementById('note-railway').value = data.railway_station_name || '';
+  document.getElementById('note-railway-venue').value = data.railway_to_venue_link || '';
+  document.getElementById('note-railway-stay').value = data.railway_to_stay_link || '';
 }
 
 async function saveTravelNote() {
@@ -422,7 +432,12 @@ async function saveTravelNote() {
   const { error } = await db.rpc('wd_admin_set_travel_note', {
     p_token: adminToken(),
     p_airport_name: document.getElementById('note-airport').value.trim() || null,
-    p_road_time: document.getElementById('note-road-time').value.trim() || null
+    p_road_time: document.getElementById('note-road-time').value.trim() || null,
+    p_railway_station_name: document.getElementById('note-railway').value.trim() || null,
+    p_airport_to_venue_link: document.getElementById('note-airport-venue').value.trim() || null,
+    p_airport_to_stay_link: document.getElementById('note-airport-stay').value.trim() || null,
+    p_railway_to_venue_link: document.getElementById('note-railway-venue').value.trim() || null,
+    p_railway_to_stay_link: document.getElementById('note-railway-stay').value.trim() || null
   });
   if (error) { errEl.textContent = error.message; return; }
   showToast('✅ Saved');
