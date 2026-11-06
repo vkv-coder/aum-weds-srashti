@@ -112,32 +112,53 @@ function goTab(tabId) {
 async function renderHomePage(container) {
   container.innerHTML = `
     <div class="card" id="contact-card"></div>
-    <div class="card"><div class="card-title">Function Itinerary</div><div id="itinerary-list">Loading...</div></div>
+    <div class="itinerary-grid">
+      <div class="card"><div class="card-title">📅 Events</div><div id="itinerary-list">Loading...</div></div>
+      <div class="card"><div class="card-title">🍽️ Meals</div><div id="meals-list">Loading...</div></div>
+    </div>
   `;
   renderContactCard();
+
   const { data, error } = await db.from('wd_itinerary').select('*').order('sort_order').order('event_date');
   const listEl = document.getElementById('itinerary-list');
   if (error || !data || data.length === 0) {
     listEl.innerHTML = `<div class="empty-state"><p>No functions added yet. Check back soon.</p></div>`;
-    return;
-  }
-  listEl.innerHTML = data.map(ev => `
-    <div class="itinerary-item">
-      <div class="ev-name">${escapeHtml(ev.event_name)}</div>
-      <div class="ev-meta">
-        ${ev.event_date ? '📅 ' + formatDate(ev.event_date) : ''}
-        ${ev.start_time ? ' · 🕐 ' + formatTime(ev.start_time) + (ev.end_time ? ' - ' + formatTime(ev.end_time) : '') : ''}
+  } else {
+    listEl.innerHTML = data.map(ev => `
+      <div class="itinerary-item">
+        <div class="ev-name">${escapeHtml(ev.event_name)}</div>
+        <div class="ev-meta">
+          ${ev.event_date ? '📅 ' + formatDate(ev.event_date) : ''}
+          ${ev.start_time ? ' · 🕐 ' + formatTime(ev.start_time) + (ev.end_time ? ' - ' + formatTime(ev.end_time) : '') : ''}
+        </div>
+        ${ev.venue ? `<div class="ev-meta">📍 ${escapeHtml(ev.venue)}</div>` : ''}
+        ${ev.dress_code ? `<div class="ev-meta">👗 Dress code: ${escapeHtml(ev.dress_code)}</div>` : ''}
+        ${ev.map_link || ev.coordinator_phone ? `
+        <div class="ev-links">
+          ${ev.map_link ? `<a class="ev-link-btn" href="${escapeHtml(ev.map_link)}" target="_blank" rel="noopener">🗺️ View on Map</a>` : ''}
+          ${ev.coordinator_phone ? `<a class="ev-link-btn" href="tel:${escapeHtml(ev.coordinator_phone)}">📞 ${escapeHtml(ev.coordinator_name || 'Coordinator')}</a>` : ''}
+        </div>` : ''}
       </div>
-      ${ev.venue ? `<div class="ev-meta">📍 ${escapeHtml(ev.venue)}</div>` : ''}
-      ${ev.dress_code ? `<div class="ev-meta">👗 Dress code: ${escapeHtml(ev.dress_code)}</div>` : ''}
-      ${ev.menu ? `<div class="ev-meta">🍽️ Menu: ${escapeHtml(ev.menu)}</div>` : ''}
-      ${ev.map_link || ev.coordinator_phone ? `
-      <div class="ev-links">
-        ${ev.map_link ? `<a class="ev-link-btn" href="${escapeHtml(ev.map_link)}" target="_blank" rel="noopener">🗺️ View on Map</a>` : ''}
-        ${ev.coordinator_phone ? `<a class="ev-link-btn" href="tel:${escapeHtml(ev.coordinator_phone)}">📞 ${escapeHtml(ev.coordinator_name || 'Coordinator')}</a>` : ''}
-      </div>` : ''}
-    </div>
-  `).join('');
+    `).join('');
+  }
+
+  const { data: meals, error: mealsError } = await db.from('wd_meals').select('*').order('sort_order').order('meal_date');
+  const mealsEl = document.getElementById('meals-list');
+  if (mealsError || !meals || meals.length === 0) {
+    mealsEl.innerHTML = `<div class="empty-state"><p>No meals added yet.</p></div>`;
+  } else {
+    mealsEl.innerHTML = meals.map(m => `
+      <div class="itinerary-item">
+        <div class="ev-name">${escapeHtml(m.meal_name)}</div>
+        <div class="ev-meta">
+          ${m.meal_date ? '📅 ' + formatDate(m.meal_date) : ''}
+          ${m.meal_time ? ' · 🕐 ' + formatTime(m.meal_time) : ''}
+        </div>
+        ${m.venue ? `<div class="ev-meta">📍 ${escapeHtml(m.venue)}</div>` : ''}
+        ${m.details ? `<div class="ev-meta">${escapeHtml(m.details)}</div>` : ''}
+      </div>
+    `).join('');
+  }
 }
 
 // ---------- My Stay (accommodation: place, map, rooms, coordinator) ----------

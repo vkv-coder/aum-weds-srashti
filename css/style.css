@@ -158,6 +158,13 @@ body {
   .login-box { padding: 28px 20px; }
 }
 
+/* ========== ITINERARY: EVENTS + MEALS ========== */
+.itinerary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.itinerary-grid .card { margin-bottom: 0; }
+@media (max-width: 480px) {
+  .itinerary-grid { grid-template-columns: 1fr; }
+}
+
 /* ========== DASHBOARD TILES ========== */
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
 .dash-tile {

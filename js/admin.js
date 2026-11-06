@@ -588,11 +588,84 @@ function exportTravelCSV(kind) {
 async function renderItineraryTab(container) {
   container.innerHTML = `
     <div class="card">
-      <div class="section-header"><h3>Itinerary</h3><button class="btn-primary btn-sm" onclick="openItineraryModal(null)">+ Add Event</button></div>
+      <div class="section-header"><h3>Events</h3><button class="btn-primary btn-sm" onclick="openItineraryModal(null)">+ Add Event</button></div>
       <div id="itinerary-admin-list">Loading...</div>
+    </div>
+    <div class="card">
+      <div class="section-header"><h3>Meals</h3><button class="btn-primary btn-sm" onclick="openMealModal(null)">+ Add Meal</button></div>
+      <div id="meals-admin-list">Loading...</div>
     </div>
   `;
   await loadItineraryAdmin();
+  await loadMealsAdmin();
+}
+
+let adminMealsCache = [];
+
+async function loadMealsAdmin() {
+  const { data, error } = await db.from('wd_meals').select('*').order('sort_order').order('meal_date');
+  const listEl = document.getElementById('meals-admin-list');
+  adminMealsCache = data || [];
+  if (error || !data || data.length === 0) { listEl.innerHTML = `<div class="empty-state"><p>No meals added yet.</p></div>`; return; }
+  listEl.innerHTML = data.map(m => `
+    <div class="itinerary-item">
+      <div class="section-header">
+        <div class="ev-name">🍽️ ${escapeHtml(m.meal_name)}</div>
+        <div>
+          <button class="btn-secondary btn-sm" onclick="openMealModalById('${m.id}')">Edit</button>
+          <button class="btn-danger btn-sm" onclick="deleteMeal('${m.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="ev-meta">${m.meal_date ? formatDate(m.meal_date) : ''} ${m.meal_time ? formatTime(m.meal_time) : ''}</div>
+      <div class="ev-meta">${escapeHtml(m.venue || '')}</div>
+      ${m.details ? `<div class="ev-meta">${escapeHtml(m.details)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function openMealModalById(id) {
+  openMealModal(adminMealsCache.find(m => m.id === id));
+}
+
+function openMealModal(m) {
+  m = m || {};
+  openModal(`
+    <div class="modal-title">${m.id ? 'Edit' : 'Add'} Meal</div>
+    <div class="form-group"><label>Meal Name</label><input type="text" id="meal-name" placeholder="e.g. Breakfast, Lunch, High Tea, Dinner" value="${escapeHtml(m.meal_name || '')}"></div>
+    <div class="form-group"><label>Date</label><input type="date" id="meal-date" value="${m.meal_date || ''}"></div>
+    <div class="form-group"><label>Time</label><input type="time" id="meal-time" value="${m.meal_time || ''}"></div>
+    <div class="form-group"><label>Venue</label><input type="text" id="meal-venue" value="${escapeHtml(m.venue || '')}"></div>
+    <div class="form-group"><label>Details</label><textarea id="meal-details" rows="2" placeholder="e.g. Gujarati thali buffet">${escapeHtml(m.details || '')}</textarea></div>
+    <div class="error-msg" id="meal-error"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveMeal('${m.id || ''}')">Save</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function saveMeal(id) {
+  const errEl = document.getElementById('meal-error');
+  const { error } = await db.rpc('wd_admin_upsert_meal', {
+    p_token: adminToken(), p_id: id || null,
+    p_meal_name: document.getElementById('meal-name').value.trim(),
+    p_meal_date: document.getElementById('meal-date').value || null,
+    p_meal_time: document.getElementById('meal-time').value || null,
+    p_venue: document.getElementById('meal-venue').value.trim() || null,
+    p_details: document.getElementById('meal-details').value.trim() || null,
+    p_sort_order: 0
+  });
+  if (error) { errEl.textContent = error.message; return; }
+  closeModal();
+  showToast('✅ Saved');
+  loadMealsAdmin();
+}
+
+async function deleteMeal(id) {
+  if (!confirm('Delete this meal?')) return;
+  const { error } = await db.rpc('wd_admin_delete_meal', { p_token: adminToken(), p_id: id });
+  if (error) { showToast(error.message, 'error'); return; }
+  loadMealsAdmin();
 }
 
 let adminItineraryCache = [];
