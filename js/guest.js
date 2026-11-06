@@ -67,7 +67,7 @@ const GUEST_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
   { id: 'stay', label: 'My Stay', icon: '🏨' },
   { id: 'home', label: 'Itinerary', icon: '📅' },
-  { id: 'announcements', label: 'Special Announcement', icon: '🔔' },
+  { id: 'announcements', label: 'Announcement', icon: '🔔' },
   { id: 'family', label: 'My Family', icon: '👪' },
   { id: 'gallery', label: 'Gallery', icon: '📸' }
 ];
@@ -190,7 +190,7 @@ async function renderContactCard() {
 async function renderAnnouncementsPage(container) {
   container.innerHTML = `
     <div class="card" id="push-card"></div>
-    <div class="card"><div class="card-title">Special Announcement</div><div id="announcements-list">Loading...</div></div>
+    <div class="card"><div class="card-title">Announcement</div><div id="announcements-list">Loading...</div></div>
   `;
   renderPushCard();
   const { data, error } = await db.from('wd_announcements').select('*').order('created_at', { ascending: false });
