@@ -463,6 +463,8 @@ async function loadItineraryAdmin() {
       </div>
       <div class="ev-meta">${ev.event_date ? formatDate(ev.event_date) : ''} ${ev.start_time ? formatTime(ev.start_time) : ''}</div>
       <div class="ev-meta">${escapeHtml(ev.venue || '')}</div>
+      ${ev.map_link ? `<div class="ev-meta">🗺️ <a href="${escapeHtml(ev.map_link)}" target="_blank" rel="noopener">Map link set</a></div>` : ''}
+      ${ev.coordinator_name || ev.coordinator_phone ? `<div class="ev-meta">📞 ${escapeHtml(ev.coordinator_name || 'Coordinator')}${ev.coordinator_phone ? ' - ' + escapeHtml(ev.coordinator_phone) : ''}</div>` : ''}
     </div>
   `).join('');
 }
@@ -480,6 +482,9 @@ function openItineraryModal(ev) {
     <div class="form-group"><label>Start Time</label><input type="time" id="ev-start" value="${ev.start_time || ''}"></div>
     <div class="form-group"><label>End Time</label><input type="time" id="ev-end" value="${ev.end_time || ''}"></div>
     <div class="form-group"><label>Venue</label><input type="text" id="ev-venue" value="${escapeHtml(ev.venue || '')}"></div>
+    <div class="form-group"><label>Google Maps Link</label><input type="url" id="ev-map-link" placeholder="https://maps.app.goo.gl/..." value="${escapeHtml(ev.map_link || '')}"></div>
+    <div class="form-group"><label>Coordinator Name</label><input type="text" id="ev-coord-name" value="${escapeHtml(ev.coordinator_name || '')}"></div>
+    <div class="form-group"><label>Coordinator Phone</label><input type="tel" id="ev-coord-phone" value="${escapeHtml(ev.coordinator_phone || '')}"></div>
     <div class="form-group"><label>Menu</label><textarea id="ev-menu" rows="2">${escapeHtml(ev.menu || '')}</textarea></div>
     <div class="form-group"><label>Dress Code</label><input type="text" id="ev-dress" value="${escapeHtml(ev.dress_code || '')}"></div>
     <div class="error-msg" id="ev-error"></div>
@@ -501,7 +506,10 @@ async function saveItinerary(id) {
     p_venue: document.getElementById('ev-venue').value.trim() || null,
     p_menu: document.getElementById('ev-menu').value.trim() || null,
     p_dress_code: document.getElementById('ev-dress').value.trim() || null,
-    p_sort_order: 0
+    p_sort_order: 0,
+    p_map_link: document.getElementById('ev-map-link').value.trim() || null,
+    p_coordinator_name: document.getElementById('ev-coord-name').value.trim() || null,
+    p_coordinator_phone: document.getElementById('ev-coord-phone').value.trim() || null
   });
   if (error) { errEl.textContent = error.message; return; }
   closeModal();

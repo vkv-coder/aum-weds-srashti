@@ -116,6 +116,11 @@ async function renderHomePage(container) {
       ${ev.venue ? `<div class="ev-meta">📍 ${escapeHtml(ev.venue)}</div>` : ''}
       ${ev.dress_code ? `<div class="ev-meta">👗 Dress code: ${escapeHtml(ev.dress_code)}</div>` : ''}
       ${ev.menu ? `<div class="ev-meta">🍽️ Menu: ${escapeHtml(ev.menu)}</div>` : ''}
+      ${ev.map_link || ev.coordinator_phone ? `
+      <div class="ev-links">
+        ${ev.map_link ? `<a class="ev-link-btn" href="${escapeHtml(ev.map_link)}" target="_blank" rel="noopener">🗺️ View on Map</a>` : ''}
+        ${ev.coordinator_phone ? `<a class="ev-link-btn" href="tel:${escapeHtml(ev.coordinator_phone)}">📞 ${escapeHtml(ev.coordinator_name || 'Coordinator')}</a>` : ''}
+      </div>` : ''}
     </div>
   `).join('');
 }
