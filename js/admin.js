@@ -335,12 +335,8 @@ async function renderTravelTab(container) {
     </div>
     <div class="card">
       <div class="card-title">Filter by Date</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;"><label>From</label><input type="date" id="travel-from" oninput="renderTravelLists()"></div>
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;"><label>To</label><input type="date" id="travel-to" oninput="renderTravelLists()"></div>
-        <button class="btn-secondary btn-sm" onclick="clearTravelFilter()">Clear</button>
-      </div>
-      <div class="form-hint" style="margin-top:8px;">Tip: set From/To to the same date to see just one day - e.g. the day before the wedding.</div>
+      <div id="travel-date-chips" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <div class="form-hint" style="margin-top:8px;">Pick a day to see who's arriving/departing then - covers one day before to one day after the function dates. Choose "All" to see or export everyone.</div>
     </div>
     <div class="card">
       <div class="section-header"><h3>Arrivals</h3><button class="btn-primary btn-sm" onclick="exportTravelCSV('arrival')">⬇️ Export to Excel</button></div>
@@ -354,9 +350,54 @@ async function renderTravelTab(container) {
   const { data, error } = await db.rpc('wd_admin_list_members', { p_token: adminToken() });
   if (error) { document.getElementById('arrivals-list').innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
   adminMembers = data || [];
+  await loadTravelDateChips();
   renderTravelLists();
   loadTravelNote();
   loadTravelRoutes();
+}
+
+let _travelDateOptions = [];
+let _travelSelectedDate = null; // null = All
+
+function addDaysIso(isoDate, n) {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function travelChipLabel(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
+async function loadTravelDateChips() {
+  const { data } = await db.from('wd_itinerary').select('event_date');
+  const dates = (data || []).map(e => e.event_date).filter(Boolean).sort();
+  _travelDateOptions = [];
+  if (dates.length > 0) {
+    const start = addDaysIso(dates[0], -1);
+    const end = addDaysIso(dates[dates.length - 1], 1);
+    let cur = start;
+    while (cur <= end) {
+      _travelDateOptions.push(cur);
+      cur = addDaysIso(cur, 1);
+    }
+  }
+  _travelSelectedDate = null;
+  renderTravelDateChips();
+}
+
+function renderTravelDateChips() {
+  const el = document.getElementById('travel-date-chips');
+  if (!el) return;
+  const chip = (val, label) =>
+    `<button class="btn-sm ${_travelSelectedDate === val ? 'btn-primary' : 'btn-secondary'}" onclick="selectTravelDate(${val === null ? 'null' : `'${val}'`})">${label}</button>`;
+  el.innerHTML = chip(null, 'All') + _travelDateOptions.map(d => chip(d, travelChipLabel(d))).join('');
+}
+
+function selectTravelDate(d) {
+  _travelSelectedDate = d;
+  renderTravelDateChips();
+  renderTravelLists();
 }
 
 async function loadTravelNote() {
@@ -440,22 +481,12 @@ async function deleteTravelRoute(id) {
   loadTravelRoutes();
 }
 
-function clearTravelFilter() {
-  document.getElementById('travel-from').value = '';
-  document.getElementById('travel-to').value = '';
-  renderTravelLists();
-}
-
 function travelFilterRange() {
-  return {
-    from: document.getElementById('travel-from').value || null,
-    to: document.getElementById('travel-to').value || null
-  };
+  return { from: _travelSelectedDate, to: _travelSelectedDate };
 }
 
 function travelHasFilter() {
-  const { from, to } = travelFilterRange();
-  return !!(from || to);
+  return !!_travelSelectedDate;
 }
 
 function filterByDate(members, dateField) {
@@ -545,7 +576,7 @@ function exportTravelCSV(kind) {
   const a = document.createElement('a');
   a.href = url;
   const { from, to } = travelFilterRange();
-  const suffix = (from || to) ? `-${from || 'start'}_to_${to || 'end'}` : '';
+  const suffix = from && from === to ? `-${from}` : (from || to) ? `-${from || 'start'}_to_${to || 'end'}` : '';
   a.download = `om-srashti-${kind}s${suffix}.csv`;
   document.body.appendChild(a);
   a.click();
