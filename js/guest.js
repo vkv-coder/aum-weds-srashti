@@ -81,6 +81,11 @@ function renderNavTabs() {
 
 function renderDashboardPage(container) {
   container.innerHTML = `
+    <div class="wedding-banner">
+      <div class="banner-icons">💐🎉💐</div>
+      <div class="banner-title">Om weds Srashti</div>
+      <div class="banner-subtitle">Wedding Celebration</div>
+    </div>
     <div class="card" id="contact-card"></div>
     <div class="card">
       <div class="card-title">Dashboard</div>

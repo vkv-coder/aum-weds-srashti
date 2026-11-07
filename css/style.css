@@ -25,7 +25,7 @@
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
-  background: var(--bg);
+  background: linear-gradient(160deg, #FADCE0 0%, #FCEEDD 35%, #FFF9F2 60%, #F3E0B8 100%) fixed;
   color: var(--text);
   min-height: 100vh;
 }
@@ -103,6 +103,15 @@ body {
 .page-content { padding: 16px; max-width: 760px; margin: 0 auto; }
 
 .card { background: var(--bg-card); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
+
+.wedding-banner {
+  background: linear-gradient(120deg, #641C2F 0%, #9C2C49 45%, #C09A5B 100%);
+  color: #fff; border-radius: var(--radius); padding: 26px 18px; text-align: center;
+  margin-bottom: 14px; box-shadow: var(--shadow);
+}
+.wedding-banner .banner-icons { font-size: 22px; letter-spacing: 10px; }
+.wedding-banner .banner-title { font-size: 26px; font-weight: 800; margin-top: 6px; }
+.wedding-banner .banner-subtitle { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 6px; letter-spacing: 2px; text-transform: uppercase; }
 .card-title { font-size: 16px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .section-header h3 { font-size: 15px; color: var(--accent); }
