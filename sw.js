@@ -1,4 +1,4 @@
-const CACHE_NAME = 'om-srashti-v18';
+const CACHE_NAME = 'om-srashti-v19';
 const SHELL_FILES = [
   '/index.html',
   '/admin.html',
