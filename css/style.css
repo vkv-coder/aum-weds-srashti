@@ -96,8 +96,8 @@ body {
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .btn-logout { background: rgba(0,0,0,0.12); color: var(--accent); border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
 
-.nav-tabs { display: flex; background: var(--primary-light); overflow-x: auto; }
-.nav-tab { flex: 1; text-align: center; padding: 12px 8px; font-size: 13px; color: rgba(100,28,47,0.65); cursor: pointer; white-space: nowrap; }
+.nav-tabs { display: flex; background: var(--primary); overflow-x: auto; }
+.nav-tab { flex: 1; text-align: center; padding: 12px 8px; font-size: 13px; color: rgba(100,28,47,0.7); cursor: pointer; white-space: nowrap; }
 .nav-tab.active { color: var(--accent); font-weight: 700; border-bottom: 3px solid var(--accent); }
 
 .page-content { padding: 16px; max-width: 760px; margin: 0 auto; }
@@ -105,13 +105,13 @@ body {
 .card { background: var(--bg-card); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
 
 .wedding-banner {
-  background: linear-gradient(120deg, #641C2F 0%, #9C2C49 45%, #C09A5B 100%);
-  color: #fff; border-radius: var(--radius); padding: 26px 18px; text-align: center;
+  background: linear-gradient(120deg, #D4BA8F 0%, #C09A5B 50%, #D4BA8F 100%);
+  color: var(--accent); border-radius: var(--radius); padding: 26px 18px; text-align: center;
   margin-bottom: 14px; box-shadow: var(--shadow);
 }
 .wedding-banner .banner-icons { font-size: 22px; letter-spacing: 10px; }
 .wedding-banner .banner-title { font-size: 26px; font-weight: 800; margin-top: 6px; }
-.wedding-banner .banner-subtitle { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 6px; letter-spacing: 2px; text-transform: uppercase; }
+.wedding-banner .banner-subtitle { font-size: 12px; color: rgba(100,28,47,0.8); margin-top: 6px; letter-spacing: 2px; text-transform: uppercase; }
 .card-title { font-size: 16px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .section-header h3 { font-size: 15px; color: var(--accent); }
