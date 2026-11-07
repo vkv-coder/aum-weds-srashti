@@ -4,10 +4,10 @@
    ========================================== */
 
 :root {
-  --primary: #7A1230;
-  --primary-light: #A32347;
-  --accent: #C9A227;
-  --accent-light: #E0C25C;
+  --primary: #641C2F;
+  --primary-light: #9C2C49;
+  --accent: #C09A5B;
+  --accent-light: #D4BA8F;
   --bg: #FFF8EE;
   --bg-card: #FFFFFF;
   --text: #2B1A1E;
@@ -17,7 +17,7 @@
   --success: #2E7D32;
   --danger: #C62828;
   --warning: #B8860B;
-  --shadow: 0 2px 12px rgba(122,18,48,0.12);
+  --shadow: 0 2px 12px rgba(100,28,47,0.12);
   --radius: 10px;
 }
 
@@ -39,7 +39,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #7A1230 0%, #A32347 55%, #C9A227 100%);
+  background: linear-gradient(135deg, #641C2F 0%, #9C2C49 55%, #C09A5B 100%);
   padding: 16px;
 }
 
@@ -173,8 +173,8 @@ body {
 }
 .dash-tile:hover { transform: translateY(-2px); }
 .dash-tile .dash-icon { font-size: 28px; display: block; margin-bottom: 8px; }
-.dash-tile-1 { background: linear-gradient(135deg, #7A1230, #A32347); }
-.dash-tile-2 { background: linear-gradient(135deg, #B8860B, #E0C25C); }
+.dash-tile-1 { background: linear-gradient(135deg, #641C2F, #9C2C49); }
+.dash-tile-2 { background: linear-gradient(135deg, #B8860B, #D4BA8F); }
 .dash-tile-3 { background: linear-gradient(135deg, #0F6E6E, #3FB6B6); }
 .dash-tile-4 { background: linear-gradient(135deg, #1C5A8A, #3F8FC6); }
 .dash-tile-5 { background: linear-gradient(135deg, #3E7D32, #6EBF5E); }

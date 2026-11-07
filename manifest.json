@@ -6,7 +6,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#FFF8EE",
-  "theme_color": "#7A1230",
+  "theme_color": "#641C2F",
   "icons": [
     { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
     { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
