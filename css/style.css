@@ -39,7 +39,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #641C2F 0%, #9C2C49 55%, #C09A5B 100%);
+  background: linear-gradient(135deg, #FADCE0 0%, #FCEEDD 55%, #F0D9A8 100%);
   padding: 16px;
 }
 
@@ -144,12 +144,6 @@ body {
 .support-line { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .support-line a { color: var(--accent); }
 
-/* entry-screen footer sits on the dark gradient, not the white card - needs light text instead of the default muted/dark colors */
-#entry-screen .app-footer { color: rgba(255,255,255,0.85); }
-#entry-screen .support-line { color: rgba(255,255,255,0.85); }
-#entry-screen .support-line a,
-#entry-screen .anyapps-badge { color: #fff; }
-#entry-screen .powered-by { color: rgba(255,255,255,0.7); }
 .powered-by { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
 .anyapps-badge { color: var(--text); font-weight: 700; text-decoration: none; }
 .anyapps-badge .accent { color: var(--accent); }
